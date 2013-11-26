@@ -1,0 +1,10 @@
+
+
+{
+  "protocol":     		"http",
+  "hostname":     		"localhost",
+  "port":         		9200,
+  "base-route":   		"/",
+  "collection-name":	"users"
+}
+

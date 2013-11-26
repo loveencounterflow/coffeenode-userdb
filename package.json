@@ -1,0 +1,36 @@
+{
+  "name": "coffeenode-userdb",
+  "version": "0.0.2",
+  "description": "ERROR: No README data found!",
+  "main": "lib/main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "BSD-2-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/loveencounterflow/coffeenode-userdb"
+  },
+  "bugs": {
+    "url": "https://github.com/loveencounterflow/coffeenode-userdb/issues"
+  },
+  "dependencies": {
+    "coffee-script": "~1.6.3",
+    "request": "~2.27.0"
+  },
+  "larq": {
+    "extensions": {},
+    "compile-statements": {},
+    "%cache": {
+      "routes": {
+        "lib/main.js": 1,
+        "lib/test.js": 1,
+        "lib/examples.js": 1
+      }
+    }
+  },
+  "readmeFilename": "README.md",
+  "readme": "ERROR: No README data found!",
+  "_id": "coffeenode-userdb@0.0.1"
+}

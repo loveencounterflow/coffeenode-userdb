@@ -1,8 +1,8 @@
 
 
 - [CoffeeNode UserDB](#coffeenode-userdb)
-	- [What is it?](#what-is-it)
-	- [Why ElasticSearch?](#why-elasticsearch)
+  - [What is it?](#what-is-it)
+  - [Why ElasticSearch?](#why-elasticsearch)
 
 > **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
@@ -26,7 +26,51 @@ Granted, ElasticSearch may look like overkill when the requirement is just to st
 usernames, encrypted passwords and an email addresses. That said, it is quite typical for an application to
 only ever use a fraction of the capabilities of *any* modern DB, and a 'tiny' solution like SQLite, while
 certainly appropriate for quite a number of use cases, stops scaling quite early: no HTTP interface, no
-access from multiple processes, no replication—and, of course, it's still a relational DB.
+access from multiple processes, and no replication.
+
+## Configuration
+
+
+
+    {
+      "protocol":         "http",
+      "hostname":         "localhost",
+      "port":             9200,
+      "base-route":       "/",
+      "collection-name":  "users",
+      "description": {
+        "mappings": {
+          "user": {
+            "properties": {
+              "_id": {
+                "type": "string",
+                "path": "uid"
+              },
+              "~isa": {
+                "type": "string",
+                "index": "not_analyzed"
+              },
+              "name": {
+                "type": "string",
+                "index": "not_analyzed"
+              },
+              "uid": {
+                "type": "string",
+                "index": "not_analyzed"
+              },
+              "password": {
+                "type": "string",
+                "index": "not_analyzed"
+              },
+              "email": {
+                "type": "string",
+                "index": "not_analyzed"
+              }
+            }
+          }
+        }
+      }
+    }
 
 
 

@@ -5,6 +5,38 @@
   "hostname":     		"localhost",
   "port":         		9200,
   "base-route":   		"/",
-  "collection-name":	"users"
+  "collection-name":	"users",
+	"description": {
+	  "mappings": {
+	    "user": {
+	      "properties": {
+	        "_id": {
+	          "type": "string",
+	          "path": "uid"
+	        },
+	        "~isa": {
+	          "type": "string",
+	          "index": "not_analyzed"
+	        },
+	        "name": {
+	          "type": "string",
+	          "index": "not_analyzed"
+	        },
+	        "uid": {
+	          "type": "string",
+	          "index": "not_analyzed"
+	        },
+	        "password": {
+	          "type": "string",
+	          "index": "not_analyzed"
+	        },
+	        "email": {
+	          "type": "string",
+	          "index": "not_analyzed"
+	        }
+	      }
+	    }
+	  }
+	}
 }
 

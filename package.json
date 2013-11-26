@@ -17,7 +17,9 @@
   },
   "dependencies": {
     "coffee-script": "~1.6.3",
-    "request": "~2.27.0"
+    "request": "~2.27.0",
+    "bcryptjs": "~0.7.10",
+    "zxcvbn": "~1.0.0"
   },
   "larq": {
     "extensions": {},
@@ -26,11 +28,14 @@
       "routes": {
         "lib/main.js": 1,
         "lib/test.js": 1,
-        "lib/examples.js": 1
+        "lib/examples.js": 1,
+        "lib/core.js": 1,
+        "lib/users.js": 1,
+        "lib/passwords.js": 1
       }
     }
   },
   "readmeFilename": "README.md",
   "readme": "ERROR: No README data found!",
-  "_id": "coffeenode-userdb@0.0.1"
+  "_id": "coffeenode-userdb@0.0.2"
 }

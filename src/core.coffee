@@ -255,7 +255,7 @@ default_options           = require '../options'
   return [ url, http_method, ]
 
 #-----------------------------------------------------------------------------------------------------------
-@_id_name_from_entry = ( me, entry ) ->
+@_get_id_name = ( me ) ->
   R = me[ 'description' ]?[ 'mappings' ]?[ 'user' ]?[ 'properties' ]?[ '_id' ]?[ 'path' ]
   #.........................................................................................................
   unless R?
@@ -267,7 +267,10 @@ default_options           = require '../options'
 
 #-----------------------------------------------------------------------------------------------------------
 @_id_from_entry = ( me, entry ) ->
-  id_name = @_id_name_from_entry me, entry
+  return @__id_from_entry me, entry, @_get_id_name me
+
+#-----------------------------------------------------------------------------------------------------------
+@__id_from_entry = ( me, entry, id_name ) ->
   #.........................................................................................................
   R = entry[ id_name ]
   unless R?
@@ -276,6 +279,59 @@ default_options           = require '../options'
       found nothing instead"""
   #.........................................................................................................
   return R
+
+#-----------------------------------------------------------------------------------------------------------
+@_id_facet_from_entry = ( me, entry ) ->
+  id_name = @_get_id_name me
+  return [ id_name, @__id_from_entry me, entry, id_name ]
+
+#-----------------------------------------------------------------------------------------------------------
+@_id_facet_from_hint = ( me, id_hint ) ->
+  ### Given a hint for a unique entry identifier, return a list `[ id_name, id_value, ]` that spells out
+  the field name and value to match. An `id_hint` may be **(1)** a list, in which case it must have two
+  elements (that form a name / value pair), and the first value must be a non-empty text; **(2)** an object
+  (a POD) of type `user`, in which case the result of `USERDB._id_facet_from_entry` will be returned;
+  **(3)** an object (a POD) of the format `{ $id_name: $id_value }` with a single name and value; **(4)**
+  a value of any other type such as a text or a number; in this case, the ID mapping configured in the
+  UserDB options will be used to determine the ID field name. ###
+  switch type_of_hint = TYPES.type_of id_hint
+    #.......................................................................................................
+    when 'list'
+      #.....................................................................................................
+      unless ( length = id_hint.length ) is 2
+        throw new Error "expected a list with two elements, got one with #{length} elements"
+      #.....................................................................................................
+      R = [ id_name, id_value, ] = id_hint
+      #.....................................................................................................
+      unless ( type_of_name = TYPES.type_of id_name ) is 'text'
+        throw new Error "expected ID name to be a text, got a #{type_of_name}"
+      #.....................................................................................................
+      unless id_name.length > 0
+        throw new Error "expected ID name to be a non-empty text, got an empty text"
+      #.....................................................................................................
+      return R
+    #.......................................................................................................
+    when 'user'
+      return @_id_facet_from_entry me, id_hint
+    #.......................................................................................................
+    when 'pod'
+      #.....................................................................................................
+      facets = ( [ name, value, ] for name, value of id_hint )
+      #.....................................................................................................
+      unless ( length = facets.length ) is 1
+        throw new Error "expected a POD with a single facet, got one with #{length} facets"
+      #.....................................................................................................
+      R = [ id_name, id_value, ] = facets[ 0 ]
+      #.....................................................................................................
+      unless id_name.length > 0
+        throw new Error "expected ID name to be a non-empty text, got an empty text"
+      #.....................................................................................................
+      return R
+    #.......................................................................................................
+    when 'text', 'number', 'boolean'
+      return [ ( @_get_id_name me ), id_hint, ]
+  #.........................................................................................................
+  throw new Error "unable to get ID facet from value of type #{type_of_hint}"
 
 
 #===========================================================================================================

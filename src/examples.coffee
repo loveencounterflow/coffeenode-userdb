@@ -51,6 +51,7 @@ USERDB                    = require './main'
     'uid':        '888'
     'password':   'secret'
     'email':      'jauser@example.com'
+    '%cache':     42
   ,
     '~isa':       'user'
     'name':       'Alice'
@@ -73,10 +74,9 @@ USERDB                    = require './main'
   ]
   for entry in entries
     do ( entry ) ->
-      USERDB.create_user me, entry, ( error ) ->
-        USERDB.add_user me, entry, ( error, result ) ->
-          throw error if error?
-          log TRM.rainbow 'created user:', entry
+      USERDB.create_user me, entry, ( error, result ) ->
+        throw error if error?
+        log TRM.rainbow 'created user:', entry
 
 #-----------------------------------------------------------------------------------------------------------
 @populate = ->
@@ -119,12 +119,6 @@ USERDB                    = require './main'
     throw error if error?
     info response
 
-############################################################################################################
-db = USERDB.new_db()
-
-query =
-  query:
-    match_all: {}
 
 # USERDB.search db, query, ( error, results ) ->
 #   throw error if error?
@@ -146,10 +140,6 @@ query =
 #   throw error if error?
 #   log TRM.truth exists
 
-@populate db
-
-# bcrypt                    = require 'bcryptjs'
-
 
 # username = 'joe'
 # password = '1234'
@@ -162,24 +152,119 @@ query =
 #   USERDB.test_password db,  '1234', password_encrypted, ( error, matches ) ->
 #     info '1234', TRM.truth matches
 
-  # log TRM.truth bcrypt.compareSync '123', password_encrypted
-  # log TRM.truth bcrypt.compareSync '1234', password_encrypted
+#-----------------------------------------------------------------------------------------------------------
+@show_password_strengths = ( db ) ->
+  passwords = [
+    '123'
+    '111111111111'
+    'secret'
+    'skxawng'
+    '$2a$10$P3WCFTtFt1/ubanXUGZ9cerQsld4YMtKQXeslq4UWaQjAfml5b5UK' ]
 
-# info USERDB.validate_password_strength '123'
+  for password in passwords
+    log TRM.rainbow password, USERDB.report_password_strength db, password
 
-# zxcvbn = require 'zxcvbn/zxcvbn/compiled.js'
-# log zxcvbn.zxcvbn '123'
-# log zxcvbn.zxcvbn '$2a$10$P3WCFTtFt1/ubanXUGZ9cerQsld4YMtKQXeslq4UWaQjAfml5b5UK'
+#-----------------------------------------------------------------------------------------------------------
+@test_password = ( db ) ->
+  password = '*?!'
+  USERDB.encrypt_password db, password, ( error, password_encrypted ) ->
+    info password_encrypted
+    USERDB.test_password db, password, password_encrypted, ( error, matches ) ->
+      info password, TRM.truth matches
 
-# passwords = [
-#   '123'
-#   '111111111111'
-#   'secret'
-#   'skxawng'
-#   '$2a$10$P3WCFTtFt1/ubanXUGZ9cerQsld4YMtKQXeslq4UWaQjAfml5b5UK' ]
+#-----------------------------------------------------------------------------------------------------------
+@get_user_by_hints = ( db ) ->
+  #.........................................................................................................
+  ok_uid_hints = [
+    '888'
+    [ 'uid', '888', ]
+    [ 'email', 'jauser@example.com', ]
+  ,
+    '~isa':       'user'
+    'name':       'Just A. User'
+    'uid':        '888'
+    'password':   'secret'
+    'email':      'jauser@example.com'
+    '%cache':     42
+  ,
+    'name':       'Just A. User'
 
-# for password in passwords
-#   log TRM.rainbow password, USERDB.report_password_strength db, password
+    ]
+  #.........................................................................................................
+  not_ok_uid_hints = [
+
+    [ 'email', ]
+    [ 'email', 'foo', 'bar', ]
+  ,
+    '~isa':       'XXXXXXXXXX'
+    'name':       'Just A. User'
+    'uid':        '888'
+  ,
+    'name':       'Just A. User'
+    'uid':        '888'
+    ]
+  #.........................................................................................................
+  for uid_hint in ok_uid_hints
+    log()
+    log TRM.cyan rpr uid_hint
+    log TRM.yellow USERDB._id_facet_from_hint db, uid_hint
+  #.........................................................................................................
+  try
+    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 0 ]
+    throw new Error "should not have passed"
+  catch error
+    throw error unless error[ 'message' ] is "expected a list with two elements, got one with 1 elements"
+  #.........................................................................................................
+  try
+    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 1 ]
+    throw new Error "should not have passed"
+  catch error
+    throw error unless error[ 'message' ] is "expected a list with two elements, got one with 3 elements"
+  #.........................................................................................................
+  try
+    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 2 ]
+    throw new Error "should not have passed"
+  catch error
+    throw error unless error[ 'message' ] is "unable to get ID facet from value of type XXXXXXXXXX"
+  #.........................................................................................................
+  try
+    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 3 ]
+    throw new Error "should not have passed"
+  catch error
+    throw error unless error[ 'message' ] is "expected a POD with a single facet, got one with 2 facets"
+
+#-----------------------------------------------------------------------------------------------------------
+@authenticate_users = ( db ) ->
+  uid_hints_and_passwords = [
+    [   '888',                          'secret',         true,   ]
+    [   '888',                          'secretX',        false,  ]
+    [   '777',                          'youwontguess',   true,   ]
+    [   '777',                          'wrong',          false,  ]
+    [ [ 'email', 'bobby@acme.corp'   ], '&%/%$%$%$',      false,  ]
+    [ [ 'email', 'bobby@acme.corp'   ], 'youwontguess',   true,  ]
+    [ [ 'email', 'alice@hotmail.com' ], 'secretX',        false,  ]
+    [ [ 'email', 'alice@hotmail.com' ], 'nonce',          true,   ]
+    ]
+  #.........................................................................................................
+  for [ uid_hint, password, probe, ] in uid_hints_and_passwords
+    do ( uid_hint, password, probe ) =>
+      USERDB.authenticate_user db, uid_hint, password, ( error, is_ok ) =>
+        # debug ( rpr is_ok ), [ uid_hint, password, probe, ]
+        log ( TRM.gold uid_hint ), ( TRM.blue password ), ( TRM.truth probe ), ( TRM.truth is_ok ), ( TRM.truth is_ok is probe )
+
+
+############################################################################################################
+db = USERDB.new_db()
+
+# query =
+#   query:
+#     match_all: {}
+
+# @populate db
+# @get_user_by_hints db
+@authenticate_users db
+
+
 
 
 

@@ -20,7 +20,16 @@ warn                      = TRM.get_logger 'warn',     badge
 help                      = TRM.get_logger 'help',     badge
 echo                      = TRM.echo.bind TRM
 #...........................................................................................................
-bcrypt                    = require 'bcryptjs'
+### Attempt to load faster bcrypt C+ library, fallback to slower JS on module missing: ###
+try
+  ### https://github.com/ncb000gt/node.bcrypt.js/ ###
+  bcrypt                    = require 'bcrypt'
+#...........................................................................................................
+catch error
+  throw error unless error[ 'code'] is 'MODULE_NOT_FOUND'
+  ### https://github.com/dcodeIO/bcrypt.js ###
+  bcrypt                    = require 'bcryptjs'
+#...........................................................................................................
 ### https://github.com/lowe/zxcvbn ###
 ### https://github.com/mintplant/node-zxcvbn ###
 zxcvbn                    = require 'coffeenode-zxcvbn'

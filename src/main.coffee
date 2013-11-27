@@ -11,22 +11,23 @@ TYPES                     = require 'coffeenode-types'
 TRM                       = require 'coffeenode-trm'
 rpr                       = TRM.rpr.bind TRM
 badge                     = 'USERDB/main'
-log                       = TRM.get_logger 'plain', badge
-info                      = TRM.get_logger 'info',  badge
-whisper                   = TRM.get_logger 'whisper',  badge
-alert                     = TRM.get_logger 'alert', badge
-debug                     = TRM.get_logger 'debug', badge
-warn                      = TRM.get_logger 'warn',  badge
-help                      = TRM.get_logger 'help',  badge
+log                       = TRM.get_logger 'plain',   badge
+info                      = TRM.get_logger 'info',    badge
+whisper                   = TRM.get_logger 'whisper', badge
+alert                     = TRM.get_logger 'alert',   badge
+debug                     = TRM.get_logger 'debug',   badge
+warn                      = TRM.get_logger 'warn',    badge
+help                      = TRM.get_logger 'help',    badge
 echo                      = TRM.echo.bind TRM
 #...........................................................................................................
 userdb_core               = require './core'
 userdb_users              = require './users'
 userdb_passwords          = require './passwords'
+# userdb_web                = require './web'
 USERDB                    = @
 
 #-----------------------------------------------------------------------------------------------------------
-# Mix-in everything from core
+# Mix-in
 do ->
   for mixin in [ userdb_core, userdb_users, userdb_passwords, ]
     for name, value of mixin

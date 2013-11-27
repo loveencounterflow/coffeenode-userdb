@@ -19,7 +19,11 @@
     "coffee-script": "~1.6.3",
     "request": "~2.27.0",
     "bcryptjs": "~0.7.10",
-    "coffeenode-zxcvbn": "~1.0.0"
+    "coffeenode-zxcvbn": "~1.0.0",
+    "bcrypt": "~0.7.7"
+  },
+  "optionalDependencies": {
+    "bcrypt": "~0.7.7"
   },
   "larq": {
     "extensions": {},
@@ -31,7 +35,9 @@
         "lib/examples.js": 1,
         "lib/core.js": 1,
         "lib/users.js": 1,
-        "lib/passwords.js": 1
+        "lib/passwords.js": 1,
+        "lib/templates.js": 1,
+        "lib/web.js": 1
       }
     }
   },

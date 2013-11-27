@@ -10,16 +10,6 @@
   "description": {
     "mappings": {
       "user": {
-        "dynamic_templates": [
-          {
-            "template_2": {
-              "match": "%*",
-              "mapping": {
-                "index": "no"
-              }
-            }
-          }
-        ],
         "properties": {
           "_id": {
             "type": "string",

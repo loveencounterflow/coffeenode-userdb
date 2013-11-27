@@ -72,19 +72,11 @@ USERDB                    = require './main'
   ,
   ]
   for entry in entries
-    # USERDB.upsert me, entry, ( error, result ) ->
-    #   throw error if error?
-    #   log TRM.rainbow result
     do ( entry ) ->
-      USERDB.user_exists me, entry[ 'uid' ], ( error, exists ) ->
-        throw error if error?
-        info entry[ 'uid' ], TRM.truth exists
+      USERDB.create_user me, entry, ( error ) ->
         USERDB.add_user me, entry, ( error, result ) ->
           throw error if error?
-          # log TRM.rainbow result
-          USERDB.user_exists me, entry[ 'uid' ], ( error, exists ) ->
-            throw error if error?
-            info entry[ 'uid' ], TRM.truth exists
+          log TRM.rainbow 'created user:', entry
 
 #-----------------------------------------------------------------------------------------------------------
 @populate = ->
@@ -154,19 +146,24 @@ query =
 #   throw error if error?
 #   log TRM.truth exists
 
-# @populate db
+@populate db
 
-bcrypt                    = require 'bcryptjs'
+# bcrypt                    = require 'bcryptjs'
 
-TRM.dir bcrypt
 
-username = 'joe'
-password = '1234'
-hash = bcrypt.hashSync password, 10
+# username = 'joe'
+# password = '1234'
+# # hash = bcrypt.hashSync password, 10
+# USERDB.encrypt_password db, password, ( error, password_encrypted ) ->
+#   throw error if error?
+#   info '©33q', password_encrypted
+#   USERDB.test_password db,  '123', password_encrypted, ( error, matches ) ->
+#     info '123', TRM.truth matches
+#   USERDB.test_password db,  '1234', password_encrypted, ( error, matches ) ->
+#     info '1234', TRM.truth matches
 
-info hash
-log TRM.truth bcrypt.compareSync '123', hash
-log TRM.truth bcrypt.compareSync '1234', hash
+  # log TRM.truth bcrypt.compareSync '123', password_encrypted
+  # log TRM.truth bcrypt.compareSync '1234', password_encrypted
 
 # info USERDB.validate_password_strength '123'
 
@@ -174,15 +171,15 @@ log TRM.truth bcrypt.compareSync '1234', hash
 # log zxcvbn.zxcvbn '123'
 # log zxcvbn.zxcvbn '$2a$10$P3WCFTtFt1/ubanXUGZ9cerQsld4YMtKQXeslq4UWaQjAfml5b5UK'
 
-passwords = [
-  '123'
-  '111111111111'
-  'secret'
-  'skxawng'
-  '$2a$10$P3WCFTtFt1/ubanXUGZ9cerQsld4YMtKQXeslq4UWaQjAfml5b5UK' ]
+# passwords = [
+#   '123'
+#   '111111111111'
+#   'secret'
+#   'skxawng'
+#   '$2a$10$P3WCFTtFt1/ubanXUGZ9cerQsld4YMtKQXeslq4UWaQjAfml5b5UK' ]
 
-for password in passwords
-  log TRM.rainbow password, USERDB.report_password_strength db, password
+# for password in passwords
+#   log TRM.rainbow password, USERDB.report_password_strength db, password
 
 
 

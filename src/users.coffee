@@ -24,14 +24,21 @@ echo                      = TRM.echo.bind TRM
 
 
 #-----------------------------------------------------------------------------------------------------------
-@new_user = ( me, uid, email, password ) ->
-  R =
-    '~isa':       'user'
-    'uid':        uid
-    'email':      email
-    'password':   password
+@create_user = ( me, entry, handler ) ->
+  password = entry[ 'password' ]
+  return handler new Error "expected a user entry with password, found none" unless password?
   #.........................................................................................................
-  return R
+  @encrypt_password me, password, ( error, password_encrypted ) =>
+    return handler error if error?
+    #.......................................................................................................
+    ### validates that ID is present: ###
+    ignored             = @_id_from_entry me, entry
+    entry[ '~isa' ]     = 'user'
+    entry[ 'password' ] = password_encrypted
+    #.......................................................................................................
+    handler null
+  #.........................................................................................................
+  return null
 
 #-----------------------------------------------------------------------------------------------------------
 @add_user = ( me, entry, handler ) ->

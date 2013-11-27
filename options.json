@@ -6,6 +6,10 @@
   "port":         		9200,
   "base-route":   		"/",
   "collection-name":	"users",
+  "bcrypt": {
+  	"rounds":					10
+  	},
+
 	"description": {
 	  "mappings": {
 	    "user": {

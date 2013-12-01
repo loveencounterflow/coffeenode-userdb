@@ -10,9 +10,10 @@ njs_fs                    = require 'fs'
 njs_url                   = require 'url'
 #...........................................................................................................
 TYPES                     = require 'coffeenode-types'
+TEXT                      = require 'coffeenode-text'
 TRM                       = require 'coffeenode-trm'
 rpr                       = TRM.rpr.bind TRM
-badge                     = 'USERDB/test'
+badge                     = 'USERDB/examples'
 log                       = TRM.get_logger 'plain',   badge
 info                      = TRM.get_logger 'info',    badge
 whisper                   = TRM.get_logger 'whisper', badge
@@ -47,11 +48,16 @@ USERDB                    = require './main'
 @add_sample_users = ( me ) ->
   entries = [
     '~isa':       'user'
+    'name':       'demo'
+    'uid':        '236472'
+    'password':   'demo'
+    'email':      'demo@example.com'
+  ,
+    '~isa':       'user'
     'name':       'Just A. User'
     'uid':        '888'
     'password':   'secret'
     'email':      'jauser@example.com'
-    '%cache':     42
   ,
     '~isa':       'user'
     'name':       'Alice'
@@ -236,21 +242,30 @@ USERDB                    = require './main'
 #-----------------------------------------------------------------------------------------------------------
 @authenticate_users = ( db ) ->
   uid_hints_and_passwords = [
-    [   '888',                          'secret',         true,   ]
-    [   '888',                          'secretX',        false,  ]
-    [   '777',                          'youwontguess',   true,   ]
-    [   '777',                          'wrong',          false,  ]
-    [ [ 'email', 'bobby@acme.corp'   ], '&%/%$%$%$',      false,  ]
-    [ [ 'email', 'bobby@acme.corp'   ], 'youwontguess',   true,  ]
-    [ [ 'email', 'alice@hotmail.com' ], 'secretX',        false,  ]
-    [ [ 'email', 'alice@hotmail.com' ], 'nonce',          true,   ]
+    [   'nosuchuser',                   'not tested',     false,  false,   ]
+    [   'name': 'demo',                 'demo',           true,   true,   ]
+    [   '888',                          'secret',         true,   true,   ]
+    [   '888',                          'secretX',        true,   false,  ]
+    [   '777',                          'youwontguess',   true,   true,   ]
+    [   '777',                          'wrong',          true,   false,  ]
+    [ [ 'email', 'bobby@acme.corp'   ], '&%/%$%$%$',      true,   false,  ]
+    [ [ 'email', 'bobby@acme.corp'   ], 'youwontguess',   true,   true,  ]
+    [ [ 'email', 'alice@hotmail.com' ], 'secretX',        true,   false,  ]
+    [ [ 'email', 'alice@hotmail.com' ], 'nonce',          true,   true,   ]
     ]
   #.........................................................................................................
-  for [ uid_hint, password, probe, ] in uid_hints_and_passwords
-    do ( uid_hint, password, probe ) =>
-      USERDB.authenticate_user db, uid_hint, password, ( error, is_ok ) =>
-        # debug ( rpr is_ok ), [ uid_hint, password, probe, ]
-        log ( TRM.gold uid_hint ), ( TRM.blue password ), ( TRM.truth probe ), ( TRM.truth is_ok ), ( TRM.truth is_ok is probe )
+  for [ uid_hint, password, probe_user, probe_password ] in uid_hints_and_passwords
+    do ( uid_hint, password, probe_user, probe_password ) =>
+      USERDB.authenticate_user db, uid_hint, password, ( error, user_known, password_matches ) =>
+        # debug arguments
+        log ( TRM.gold TEXT.flush_left uid_hint, 35 ),
+          TEXT.flush_left ( TRM.truth probe_user                         ), 12
+          TEXT.flush_left ( TRM.truth user_known                         ), 12
+          TEXT.flush_left ( TRM.truth user_known is probe_user           ), 12
+          TEXT.flush_left ( TRM.blue password ), 30
+          TEXT.flush_left ( TRM.truth probe_password                     ), 12
+          TEXT.flush_left ( TRM.truth password_matches                   ), 12
+          TEXT.flush_left ( TRM.truth password_matches is probe_password ), 12
 
 
 ############################################################################################################
@@ -268,5 +283,5 @@ db = USERDB.new_db()
 
 
 
-echo name for name of USERDB
+# echo name for name of USERDB
 

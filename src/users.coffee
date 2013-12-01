@@ -98,13 +98,14 @@ eventually                = process.nextTick
   ### Given a user ID hint (for which see `USERDB._id_facet_from_hint`) and a (clear) password, call
   `handler` with the result of comparing the given and the stored password for the user in question. ###
   #.........................................................................................................
-  @get_user me, uid_hint, ( error, entry ) =>
+  @get_user me, uid_hint, null, ( error, entry ) =>
     return handler error if error?
+    return handler null, false, false unless entry?
     password_encrypted = entry[ 'password' ]
     #.......................................................................................................
-    @test_password me, password, password_encrypted, ( error, matches ) =>
+    @test_password me, password, password_encrypted, ( error, password_matches ) =>
       return handler error if error?
-      handler null, matches
+      handler null, true, password_matches
   #.........................................................................................................
   return null
 

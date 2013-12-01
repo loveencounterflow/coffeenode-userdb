@@ -20,16 +20,19 @@ warn                      = TRM.get_logger 'warn',    badge
 help                      = TRM.get_logger 'help',    badge
 echo                      = TRM.echo.bind TRM
 #...........................................................................................................
-userdb_core               = require './core'
-userdb_users              = require './users'
-userdb_passwords          = require './passwords'
-# userdb_web                = require './web'
+mixins = [
+  userdb_core               = require './core'
+  userdb_users              = require './users'
+  userdb_passwords          = require './passwords'
+  # userdb_web                = require './web'
+  ]
+#...........................................................................................................
 USERDB                    = @
 
 #-----------------------------------------------------------------------------------------------------------
 # Mix-in
 do ->
-  for mixin in [ userdb_core, userdb_users, userdb_passwords, ]
+  for mixin in mixins
     for name, value of mixin
       throw new Error "name clash: #{rpr name}" if USERDB[ name ]?
       USERDB[ name ] = value

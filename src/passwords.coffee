@@ -10,7 +10,7 @@ njs_url                   = require 'url'
 TYPES                     = require 'coffeenode-types'
 TRM                       = require 'coffeenode-trm'
 rpr                       = TRM.rpr.bind TRM
-badge                     = 'USERDB/users'
+badge                     = 'USERDB/passwords'
 log                       = TRM.get_logger 'plain',    badge
 info                      = TRM.get_logger 'info',     badge
 whisper                   = TRM.get_logger 'whisper',  badge
@@ -93,7 +93,9 @@ level_by_ttc =
 
 #-----------------------------------------------------------------------------------------------------------
 @test_password = ( me, password_clear, password_encrypted, handler ) ->
-  bcrypt.compare password_clear, password_encrypted, handler
+  bcrypt.compare password_clear, password_encrypted, ( error, password_matches ) =>
+    return handler error if error?
+    handler null, password_matches
   #.........................................................................................................
   return null
 

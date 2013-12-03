@@ -45,9 +45,11 @@ eventually                = process.nextTick
   password (or keep it from bein encrypted twice) is to copy the original value and update the user entry
   in the DB when `create_user` has finished. ###
   #.........................................................................................................
+  ### TAINT we do currently not have support for transactions—these will probably built on top of Redis,
+  or we may even switch to Redis as the sole DB layer for the CND UserDB. ###
+  #.........................................................................................................
   ### validates that ID is present: ###
   ignored             = @_id_from_entry me, entry
-  entry[ '~isa' ]     = 'user'
   password            = entry[ 'password' ]
   return handler new Error "expected a user entry with password, found none" unless password?
   #.........................................................................................................
@@ -61,7 +63,13 @@ eventually                = process.nextTick
 
 #-----------------------------------------------------------------------------------------------------------
 @add_user = ( me, entry, handler ) ->
+  ### Add a user as specified by `entry` to the DB. This method does not modify `entry`, except that it sets
+  `~isa` to `user`. The password will not going to be touched—you could use this method to store an
+  unencrypted password, so don't do that. Instead, use `create_user`, which is the canonical user to
+  populate the DB with user records. ###
   #.........................................................................................................
+  entry[ '~isa' ]     = 'user'
+  ### TAINT reduce to a single request ###
   @user_exists me, entry[ 'uid' ], ( error, user_exists ) =>
     return handler error if error?
     if user_exists
@@ -69,7 +77,17 @@ eventually                = process.nextTick
       id      = entry[ id_name ]
       return handler new Error "user with ID #{id_name}: #{rpr id} already registered"
     #.......................................................................................................
-    @upsert me, entry, handler
+    @user_exists me, [ 'name', entry[ 'name' ] ], ( error, user_exists ) =>
+      return handler error if error?
+      if user_exists
+        return handler new Error "user with name #{rpr entry[ 'name' ]} already registered"
+      #.....................................................................................................
+      @user_exists me, [ 'email', entry[ 'email' ] ], ( error, user_exists ) =>
+        return handler error if error?
+        if user_exists
+          return handler new Error "user with email #{rpr entry[ 'email' ]} already registered"
+        #...................................................................................................
+        @upsert me, entry, handler
   #.........................................................................................................
   return null
 

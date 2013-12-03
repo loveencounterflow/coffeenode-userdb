@@ -205,6 +205,24 @@ default_options           = require '../options'
 
 
 #===========================================================================================================
+#
+#-----------------------------------------------------------------------------------------------------------
+@validate_is_running = ( me ) ->
+  @get me, 'uid', '0', 'OK', ( error, response ) ->
+    if error?
+      if /connect ECONNREFUSED/.test error[ 'message' ]
+        alert """
+          you either forgot to start your CoffeeNode UserDB instance or it does not match the configuration:
+          #{rpr me}
+          """
+        help """
+          execute `elasticsearch -f -D es.config=/usr/local/opt/elasticsearch/config/elasticsearch.yml`
+          or demonize ElasticSearch"""
+      throw error
+    info "ElasticSearch response: #{rpr response}"
+
+
+#===========================================================================================================
 # URL BUILDING & QUERY FORMULATION
 #-----------------------------------------------------------------------------------------------------------
 @filter_query_from_id_facet = ( me, id_name, id_value ) ->

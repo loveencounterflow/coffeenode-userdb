@@ -47,31 +47,26 @@ USERDB                    = require './main'
 #-----------------------------------------------------------------------------------------------------------
 @add_sample_users = ( me ) ->
   entries = [
-    '~isa':       'user'
     'name':       'demo'
     'uid':        '236472'
     'password':   'demo'
     'email':      'demo@example.com'
   ,
-    '~isa':       'user'
     'name':       'Just A. User'
     'uid':        '888'
     'password':   'secret'
     'email':      'jauser@example.com'
   ,
-    '~isa':       'user'
     'name':       'Alice'
     'uid':        '889'
     'password':   'nonce'
     'email':      'alice@hotmail.com'
   ,
-    '~isa':       'user'
     'name':       'Bob'
     'uid':        '777'
     'password':   'youwontguess'
     'email':      'bobby@acme.corp'
   ,
-    '~isa':       'user'
     'name':       'Clark'
     'uid':        '123'
     'password':   '*?!'
@@ -275,9 +270,9 @@ db = USERDB.new_db()
 #   query:
 #     match_all: {}
 
-# @populate db
+@populate db
 # @get_user_by_hints db
-@authenticate_users db
+# @authenticate_users db
 
 
 

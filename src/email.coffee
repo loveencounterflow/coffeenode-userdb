@@ -43,4 +43,4 @@ email =
   subject:    "Hello ✔" # Subject line
   text:       "Hello world 𪜃" # plaintext body
 
-send_email email
+# send_email email

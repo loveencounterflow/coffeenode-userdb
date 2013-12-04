@@ -7,6 +7,7 @@ njs_path                  = require 'path'
 njs_fs                    = require 'fs'
 njs_url                   = require 'url'
 #...........................................................................................................
+BAP                       = require 'coffeenode-bitsnpieces'
 TYPES                     = require 'coffeenode-types'
 TRM                       = require 'coffeenode-trm'
 rpr                       = TRM.rpr.bind TRM
@@ -47,8 +48,12 @@ eventually                = process.nextTick
   ### TAINT we do currently not have support for transactions—these will probably built on top of Redis,
   or we may even switch to Redis as the sole DB layer for the CND UserDB. ###
   #.........................................................................................................
-  ### validates that ID is present: ###
-  ignored             = @_id_from_entry me, entry
+  entry[ '~isa' ]     = 'user'
+  [ pk, sks, ]        = pk_and_sks = @_primary_and_secondary_keys_from_entry me, entry
+  ### TAINT should allow client to configure ID length ###
+  entry[ pk ]         = BAP.create_random_id [ entry[ 'email' ], entry[ 'name' ], ], 12
+  ### TAINT we use constant field names here—not very abstract... ###
+  entry[ 'added' ]    = new Date()
   password            = entry[ 'password' ]
   return handler new Error "expected a user entry with password, found none" unless password?
   #.........................................................................................................
@@ -56,37 +61,43 @@ eventually                = process.nextTick
     return handler error if error?
     #.......................................................................................................
     entry[ 'password' ] = password_encrypted
-    @add_user me, entry, handler
+    @_add_user me, entry, pk_and_sks, handler
   #.........................................................................................................
   return null
 
 #-----------------------------------------------------------------------------------------------------------
 @add_user = ( me, entry, handler ) ->
-  ### Add a user as specified by `entry` to the DB. This method does not modify `entry`, except that it sets
-  `~isa` to `user`. The password will not going to be touched—you could use this method to store an
-  unencrypted password, so don't do that. Instead, use `create_user`, which is the canonical user to
-  populate the DB with user records. ###
+  pk_and_sks = @_primary_and_secondary_keys_from_entry me, entry
+  return @_add_user me, entry, pk_and_sks, handler
+
+#-----------------------------------------------------------------------------------------------------------
+@_add_user = ( me, entry, pk_and_sks, handler ) ->
+  ### Add a user as specified by `entry` to the DB. This method does not modify `entry`, The password is
+  not going to be touched—you could use this method to store an unencrypted password, so don't do that.
+  Instead, use `create_user`, which is the canonical user to populate the DB with user records. ###
   #.........................................................................................................
-  entry[ '~isa' ]     = 'user'
   ### TAINT reduce to a single request ###
-  @user_exists me, entry[ 'uid' ], ( error, user_exists ) =>
-    return handler error if error?
-    if user_exists
-      id_name = @_get_id_name me
-      id      = entry[ id_name ]
-      return handler new Error "user with ID #{id_name}: #{rpr id} already registered"
-    #.......................................................................................................
-    @user_exists me, [ 'name', entry[ 'name' ] ], ( error, user_exists ) =>
-      return handler error if error?
-      if user_exists
-        return handler new Error "user with name #{rpr entry[ 'name' ]} already registered"
-      #.....................................................................................................
-      @user_exists me, [ 'email', entry[ 'email' ] ], ( error, user_exists ) =>
-        return handler error if error?
-        if user_exists
-          return handler new Error "user with email #{rpr entry[ 'email' ]} already registered"
-        #...................................................................................................
-        @upsert me, entry, handler
+  ### TAINT introduce transactions ###
+  return @_build_indexes me, entry, pk_and_sks, handler
+
+  # @user_exists me, entry[ 'uid' ], ( error, user_exists ) =>
+  #   return handler error if error?
+  #   if user_exists
+  #     id_name = @_get_id_name me
+  #     id      = entry[ id_name ]
+  #     return handler new Error "user with ID #{id_name}: #{rpr id} already registered"
+  #   #.......................................................................................................
+  #   @user_exists me, [ 'name', entry[ 'name' ] ], ( error, user_exists ) =>
+  #     return handler error if error?
+  #     if user_exists
+  #       return handler new Error "user with name #{rpr entry[ 'name' ]} already registered"
+  #     #.....................................................................................................
+  #     @user_exists me, [ 'email', entry[ 'email' ] ], ( error, user_exists ) =>
+  #       return handler error if error?
+  #       if user_exists
+  #         return handler new Error "user with email #{rpr entry[ 'email' ]} already registered"
+  #       #...................................................................................................
+  #       @upsert me, entry, handler
   #.........................................................................................................
   return null
 

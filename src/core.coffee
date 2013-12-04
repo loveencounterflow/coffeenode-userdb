@@ -20,15 +20,13 @@ warn                      = TRM.get_logger 'warn',      badge
 help                      = TRM.get_logger 'help',      badge
 echo                      = TRM.echo.bind TRM
 #...........................................................................................................
+### https://github.com/mranney/node_redis ###
 redis                     = require 'redis'
-default_options           = require '../options'
 #...........................................................................................................
-@_esverb_by_verb =
-  'search':         '_search'
-  'define':         '_mapping'
-  'new-collection': '' # new collection uses `put` and type mapping object
-  'upsert':         '' # upserts are identified by HTTP `put` method
-  'remove':         '' # removals are identified by HTTP `delete` method
+### https://github.com/caolan/async ###
+async                     = require 'async'
+#...........................................................................................................
+default_options           = require '../options'
 
 
 #===========================================================================================================
@@ -37,7 +35,8 @@ default_options           = require '../options'
 @new_db = ->
   R                 = '~isa': 'USERDB/db'
   R[ name ]         = value for name, value of default_options
-  collection_idx    = R[ 'collection-idx' ]
+  collection_idx    = R[ 'collection-idx' ] ? 0
+  # debug '©23a', 'caveat substratum'
   R[ '%self' ]      = substrate = redis.createClient R[ 'port' ], R[ 'host' ]
   substrate.select collection_idx, redis.print
   #.........................................................................................................
@@ -45,55 +44,134 @@ default_options           = require '../options'
 
 
 #===========================================================================================================
-# ENTRY TYPE DEFINITION
+# TYPE DESCRIPTIONS
 #-----------------------------------------------------------------------------------------------------------
-### TAINT code duplication ###
-# @new_collection = ( me, description, handler ) ->
-#   #.........................................................................................................
-#   [ url, http_method ] = @_get_url_and_method me, null, 'new-collection'
-#   #.........................................................................................................
-#   request_options =
-#     method:   http_method
-#     url:      url
-#     json:     true
-#     body:     description
-#   #.........................................................................................................
-#   mik_request request_options, ( error, response ) =>
-#     return handler error if error?
-#     #.......................................................................................................
-#     result = response[ 'body' ]
-#     warn result
-#     return handler new Error     result if     ( TYPES.type_of result ) is 'text'
-#     return handler new Error rpr result unless result[ 'ok' ]
-#     handler null, result
-#   #.........................................................................................................
-#   return null
+_identity   = ( x     ) -> x
+_read_json  = ( text  ) -> JSON.parse text
+_write_json = ( value ) -> JSON.stringify value
 
 #-----------------------------------------------------------------------------------------------------------
-# @remove_collection = ( me, handler ) ->
-#   #.........................................................................................................
-#   [ url, http_method ] = @_get_url_and_method me, null, 'remove'
-#   #.........................................................................................................
-#   request_options =
-#     method:   http_method
-#     url:      url
-#     json:     true
-#     body:     ''
-#   #.........................................................................................................
-#   mik_request request_options, ( error, response ) =>
-#     return handler error if error?
-#     #.......................................................................................................
-#     result = response[ 'body' ]
-#     warn result
-#     return handler new Error     result if     ( TYPES.type_of result ) is 'text'
-#     return handler new Error rpr result unless result[ 'ok' ]
-#     handler null, result
-#   #.........................................................................................................
-#   return null
+@codecs =
+  ### In this iteration of the UserDB / Redis interface, we do not support clientside type descriptions—only
+  the types described here are legal values in entry type schemas. ###
+  #.........................................................................................................
+  date:
+    read:     ( text  ) -> new Date text
+    write:    ( value ) -> value.toISOString()
+  #.........................................................................................................
+  number:
+    read:     ( text  ) -> parseFloat text, 10
+    write:    ( value ) -> value.toString()
+  # pod:        'json'
+  #.........................................................................................................
+  json:
+    read:     _read_json
+    write:    _write_json
+  #.........................................................................................................
+  boolean:
+    read:     _read_json
+    write:    _write_json
+  #.........................................................................................................
+  null:
+    read:     _read_json
+    write:    _write_json
+  #.........................................................................................................
+  text:
+    read:     _identity
+    write:    _identity
+  #.........................................................................................................
+  identity:
+    read:     _identity
+    write:    _identity
+
+#-----------------------------------------------------------------------------------------------------------
+@_primary_and_secondary_keys_from_entry = ( me, entry ) ->
+  indexes     = me[ 'indexes' ]
+  type        = entry[ '~isa' ]
+  throw new Error "unable to find indexes in db:\n#{rpr db}"  unless indexes?
+  throw new Error "entry has no `~isa` member:\n#{rpr entry}" unless type?
+  dt_indexes  = indexes[ type ]
+  throw new Error "no index description for type #{rpr type}:\n#{rpr indexes}" unless dt_indexes?
+  pk          = dt_indexes[ 'primary-key' ]
+  throw new Error "no primary key in index description for type #{rpr type}:\n#{rpr dt_indexes}" unless pk?
+  sks         = dt_indexes[ 'secondary-keys' ] ? []
+  #.........................................................................................................
+  return [ pk, sks, ]
+
+#-----------------------------------------------------------------------------------------------------------
+@_schema_from_entry = ( me, entry ) ->
+  schemas     = me[ 'schema' ]
+  type        = entry[ '~isa' ]
+  throw new Error "unable to find schema in db:\n#{rpr db}"   unless schemas?
+  throw new Error "entry has no `~isa` member:\n#{rpr entry}" unless type?
+  R           = schemas[ type ]
+  throw new Error "unable to find schema for ty<pe #{rpr type} in db:\n#{rpr db}" unless R?
+  return R
+
+#-----------------------------------------------------------------------------------------------------------
+@_cast_to_db = ( me, entry ) ->
+  ### Given an entry, return a new POD with all values cast to DB strings as specified in that type's
+  description. ###
+  R       = {}
+  schema  = @_schema_from_entry me, entry
+  #.........................................................................................................
+  for field_name, value of entry
+    R[ field_name ] = ( @codecs[ schema[ field_name ] ? 'identity' ]?[ 'write' ] ) value
+  #.........................................................................................................
+  return R
+
+#-----------------------------------------------------------------------------------------------------------
+@_cast_from_db = ( me, entry ) ->
+  ### Given an entry coming from the DB with all values as strings, apply the decoders as specified in that
+  types's description and return the entry. ###
+  schema = @_schema_from_entry me, entry
+  #.........................................................................................................
+  for field_name, text of entry
+    R[ field_name ] = ( @codecs[ schema[ field_name ] ? 'identity' ]?[ 'read' ] ) text
+  #.........................................................................................................
+  return entry
 
 
 #===========================================================================================================
 # INSERTION
+#-----------------------------------------------------------------------------------------------------------
+@_build_indexes = ( me, entry, pk_and_sks, handler ) ->
+  ### This method performs the lowlevel gruntwork necessary to represent an entry in the Redis DB. In
+  particular, it issues a HMSET user/uid:$uid k0 v0 k1 v1 ...` command to save the the entry as a Redis
+  hash; then, it issues commands like `SET user/email:$email/uid $uid` and others (as configured in the data
+  type description) to make the entry retrievable using secondary unique keys (such as email address). ###
+  [ pk_name
+    sk_names ]  = pk_and_sks
+  entry         = @_cast_to_db me, entry
+  type          = entry[ '~isa' ]
+  description   = me[ 'description' ]
+  pk_value      = entry[ pk_name ]
+  throw new Error "unable to find a primary key (#{rpr pk_name}) in entry #{rpr entry}" unless pk_value?
+  #.........................................................................................................
+  me[ '%self' ].hmset "#{type}/#{pk_name}:#{pk_value}", entry, ( error, response ) =>
+    return handler error if error?
+    #.......................................................................................................
+    if sk_names.length is 0
+      handler null, null if handler?
+      return null
+    #.......................................................................................................
+    tasks = []
+    for sk_name in sk_names
+      sk_value  = entry[ sk_name ]
+      continue unless sk_value?
+      do ( type, sk_name, sk_value, pk_name, pk_value ) =>
+        tasks.push ( done ) =>
+          me[ '%self' ].set "#{type}/#{sk_name}:#{sk_value}/#{pk_name}", pk_value, done
+    #.......................................................................................................
+    async.parallel tasks, ( error, results ) =>
+      if error?
+        return handler errors if handler?
+        throw error
+      handler null, results if handler?
+      return null
+  #.........................................................................................................
+  return null
+
 #-----------------------------------------------------------------------------------------------------------
 @upsert = ( me, entry, handler ) ->
   unless ( entry_type = entry[ '~isa' ] )?
@@ -390,272 +468,274 @@ default_options           = require '../options'
 ############################################################################################################
 ############################################################################################################
 ############################################################################################################
-new redis code below
+
+
+# new redis code below
 
 
 
-############################################################################################################
-# ERROR                     = require 'coffeenode-stacktrace'
-njs_util                  = require 'util'
-# njs_path                  = require 'path'
-njs_fs                    = require 'fs'
-#...........................................................................................................
-# TEXT                      = require 'coffeenode-text'
-TYPES                     = require 'coffeenode-types'
-TRM                       = require 'coffeenode-trm'
-rpr                       = TRM.rpr.bind TRM
-badge                     = 'scratch'
-log                       = TRM.get_logger 'plain',     badge
-info                      = TRM.get_logger 'info',      badge
-whisper                   = TRM.get_logger 'whisper',   badge
-alert                     = TRM.get_logger 'alert',     badge
-debug                     = TRM.get_logger 'debug',     badge
-warn                      = TRM.get_logger 'warn',      badge
-help                      = TRM.get_logger 'help',      badge
-echo                      = TRM.echo.bind TRM
-rainbow                   = TRM.rainbow.bind TRM
-suspend                   = require 'coffeenode-suspend'
-step                      = suspend.step
-after                     = suspend.after
-eventually                = suspend.eventually
-immediately               = suspend.immediately
-every                     = suspend.every
-USERDB                    = require 'coffeenode-userdb'
+# ############################################################################################################
+# # ERROR                     = require 'coffeenode-stacktrace'
+# njs_util                  = require 'util'
+# # njs_path                  = require 'path'
+# njs_fs                    = require 'fs'
+# #...........................................................................................................
+# # TEXT                      = require 'coffeenode-text'
+# TYPES                     = require 'coffeenode-types'
+# TRM                       = require 'coffeenode-trm'
+# rpr                       = TRM.rpr.bind TRM
+# badge                     = 'scratch'
+# log                       = TRM.get_logger 'plain',     badge
+# info                      = TRM.get_logger 'info',      badge
+# whisper                   = TRM.get_logger 'whisper',   badge
+# alert                     = TRM.get_logger 'alert',     badge
+# debug                     = TRM.get_logger 'debug',     badge
+# warn                      = TRM.get_logger 'warn',      badge
+# help                      = TRM.get_logger 'help',      badge
+# echo                      = TRM.echo.bind TRM
+# rainbow                   = TRM.rainbow.bind TRM
+# suspend                   = require 'coffeenode-suspend'
+# step                      = suspend.step
+# after                     = suspend.after
+# eventually                = suspend.eventually
+# immediately               = suspend.immediately
+# every                     = suspend.every
+# USERDB                    = require 'coffeenode-userdb'
 
 
 
-redis = require 'redis'
+# redis = require 'redis'
 
-identity = ( x ) -> x
-
-
-#-----------------------------------------------------------------------------------------------------------
-user_description =
-  types:
-    date:
-      validate: null
-      read:     ( text  ) -> new Date text
-      # write:    ( value ) -> value.toGMTString()
-      write:    ( value ) -> value.toISOString()
-    json:
-      read:     ( text  ) -> JSON.parse text
-      write:    ( value ) -> JSON.stringify value
-    number:
-      read:     ( text  ) -> parseFloat text, 10
-      write:    ( value ) -> value.toString()
-    pod:        'json' # reference to named format
-    text:
-      read:     identity
-      write:    identity
-  schema:
-    user:
-      age:      'number'
-      rating:   'json'
-      added:    'date'
-      name:     'text'
-  # 'Index' here means 'a named text value that can be used to uniquely identify an entry'.
-  #
-  # There must be exactly one field whose value is set to `true`; its name will be used together with
-  # `value = entry[ name ]` to build a unique key for each entry; here we will use `user/uid:$uid`; this
-  # is the 'primary key'.
-  #
-  # 'Secondary keys' allow to retrieve a primary key by using another unique field of an entry. For example,
-  # a user DB might enforce all of user ID, nickname and email address to be unique over all users and
-  # use the user ID as primary key (this design will allow us to change primary email addresses and user
-  # display names without touching the 'identity' of the user). The configuration for a secondary key is
-  # by setting the name of the primary key to `true`. For example, to retrieve user IDs by email addresses,
-  # configure `{ indexes: { user: { email: uid: true } } }`; this will result in a
-  # `SET user/email:$email/uid $uid` (e.g. `SET user/email:tim@example.com/uid 'user/uid:3df843ac12'`, which
-  # indicates that the user with the email adress `tim@example.com` is on record with the key
-  # `user/uid:3df843ac12`). Note that the unqueness of secondary keys will be enforced—as long as there is
-  # a key `user/email:tim@example.com/uid` in the DB, no other user can be registered with that email
-  # address, which is probably what you want.
-  #
-  # ### TAINT tertiary keys to be implemented later ###
-  #
-  # # 'Tertiary keys' allow to retrieve facts about an entry without retrieving the entry itself. These keys
-  # # are configured like secondary keys, but using field names other than the primary key; no uniqueness
-  # # constraint will be enforced for these.
-  # # Any other fields listed here must name one or more other existing fields; for each
-  # # referenced field, an index  uniqueness of `SET user/$fromname:$fromvalue/$toname $tovalue` will be enforced
-  indexes:
-    user:
-      uid:      true  # user entries will be saved as `HMSET user/uid:$uid k0 v0 k1 v1 ...`
-      email:
-        uid:    true # results in a `SET  user/email:$email/uid   $uid'  for each user added
-      name:
-        uid:    true # results in a `SET  user/name:$name/uid   $uid'   for each user added
-        # email:  true # results in a `SADD user/name:$name/email $email` for each user added
-
-#-----------------------------------------------------------------------------------------------------------
-@compile_description = ( me, description ) ->
-  types   = {}
-  codecs  = {}
-  pks     = {}
-  sks     = {}
-  #.........................................................................................................
-  R       =
-    '%codecs':        codecs
-    'schema':         description[ 'schema' ]
-    'indexes':        description[ 'indexes' ]
-    'primary-keys':   pks
-    'secondary-keys': sks
-  #.........................................................................................................
-  for type, type_info of description[ 'types' ]
-    continue if ( info_type = TYPES.type_of type_info ) is 'text'
-    throw new Error "expected a text or a POD, got a #{info_type}" if info_type isnt 'pod'
-    types[ type ] = codec = {}
-    codec[ 'read'  ] = type_info[ 'read'  ] ? id
-    codec[ 'write' ] = type_info[ 'write' ] ? id
-  #.........................................................................................................
-  for type, type_info of description[ 'types' ]
-    continue unless ( info_type = TYPES.type_of type_info ) is 'text'
-    codec = types[ type_info ]
-    throw new Error "unknown USERDB data type: #{rpr type}" unless codec?
-    types[ type ] = codec
-  #.........................................................................................................
-  for entry_type, type_info of description[ 'schema' ]
-    for field_name, type_name of type_info
-      codec = types[ type_name ]
-      throw new Error "unknown USERDB data type: #{rpr type}" unless codec?
-      codecs[ field_name ] = codec
-  #.........................................................................................................
-  for type_name, type_info of description[ 'indexes' ]
-    pk = null
-    for field_name, index_info of type_info
-      if index_info isnt true
-        continue if ( index_info_type = TYPES.type_of index_info ) is 'pod'
-        throw new Error "unsupported index value #{rpr index_info}" if index_info is false
-        throw new Error "unsupported index value type #{rpr index_info_type}"
-      if pk?
-        throw new Error "illegal to specify both #{rpr pk} and #{rpr field_name} as primary keys"
-      pks[ type_name ] = pk = field_name
-  #.........................................................................................................
-  throw new Error "must configure one primary key, got none" unless pk?
-  #.........................................................................................................
-  for type_name, type_info of description[ 'indexes' ]
-    for field_name, index_info of type_info
-      continue if index_info is true
-      for pk_name, index_value of index_info
-        index_value_type = TYPES.type_of index_value
-        throw new Error "unsupported index value #{rpr index_value}" if index_value is false
-        throw new Error "unsupported index value type #{rpr index_value_type}" if index_value isnt true
-        throw new Error "illegal field name #{rpr field_name}" if pk_name isnt pk
-        ( sks[ type_name ]?= {} )[ field_name ] = true
-  #.........................................................................................................
-  return R
+# identity = ( x ) -> x
 
 
+# #-----------------------------------------------------------------------------------------------------------
+# user_description =
+#   types:
+#     date:
+#       validate: null
+#       read:     ( text  ) -> new Date text
+#       # write:    ( value ) -> value.toGMTString()
+#       write:    ( value ) -> value.toISOString()
+#     json:
+#       read:     ( text  ) -> JSON.parse text
+#       write:    ( value ) -> JSON.stringify value
+#     number:
+#       read:     ( text  ) -> parseFloat text, 10
+#       write:    ( value ) -> value.toString()
+#     pod:        'json' # reference to named format
+#     text:
+#       read:     identity
+#       write:    identity
+#   schema:
+#     user:
+#       age:      'number'
+#       rating:   'json'
+#       added:    'date'
+#       name:     'text'
+#   # 'Index' here means 'a named text value that can be used to uniquely identify an entry'.
+#   #
+#   # There must be exactly one field whose value is set to `true`; its name will be used together with
+#   # `value = entry[ name ]` to build a unique key for each entry; here we will use `user/uid:$uid`; this
+#   # is the 'primary key'.
+#   #
+#   # 'Secondary keys' allow to retrieve a primary key by using another unique field of an entry. For example,
+#   # a user DB might enforce all of user ID, nickname and email address to be unique over all users and
+#   # use the user ID as primary key (this design will allow us to change primary email addresses and user
+#   # display names without touching the 'identity' of the user). The configuration for a secondary key is
+#   # by setting the name of the primary key to `true`. For example, to retrieve user IDs by email addresses,
+#   # configure `{ indexes: { user: { email: uid: true } } }`; this will result in a
+#   # `SET user/email:$email/uid $uid` (e.g. `SET user/email:tim@example.com/uid 'user/uid:3df843ac12'`, which
+#   # indicates that the user with the email adress `tim@example.com` is on record with the key
+#   # `user/uid:3df843ac12`). Note that the unqueness of secondary keys will be enforced—as long as there is
+#   # a key `user/email:tim@example.com/uid` in the DB, no other user can be registered with that email
+#   # address, which is probably what you want.
+#   #
+#   # ### TAINT tertiary keys to be implemented later ###
+#   #
+#   # # 'Tertiary keys' allow to retrieve facts about an entry without retrieving the entry itself. These keys
+#   # # are configured like secondary keys, but using field names other than the primary key; no uniqueness
+#   # # constraint will be enforced for these.
+#   # # Any other fields listed here must name one or more other existing fields; for each
+#   # # referenced field, an index  uniqueness of `SET user/$fromname:$fromvalue/$toname $tovalue` will be enforced
+#   indexes:
+#     user:
+#       uid:      true  # user entries will be saved as `HMSET user/uid:$uid k0 v0 k1 v1 ...`
+#       email:
+#         uid:    true # results in a `SET  user/email:$email/uid   $uid'  for each user added
+#       name:
+#         uid:    true # results in a `SET  user/name:$name/uid   $uid'   for each user added
+#         # email:  true # results in a `SADD user/name:$name/email $email` for each user added
 
-#-----------------------------------------------------------------------------------------------------------
-@cast_to_db = ( me, pod ) ->
-  R = {}
-  codecs = me[ 'description' ][ '%codecs' ]
-  for name, value of pod
-    R[ name ] = ( codecs[ name ]?[ 'write' ] ? identity ) value
-  return R
-
-#-----------------------------------------------------------------------------------------------------------
-@cast_from_db = ( me, pod ) ->
-  codecs = me[ 'description' ][ '%codecs' ]
-  warn codecs
-  for name, text of pod
-    pod[ name ] = ( codecs[ name ]?[ 'read' ] ? identity ) text
-  return pod
-
-#-----------------------------------------------------------------------------------------------------------
-@_build_indexes = ( me, entry, handler ) ->
-  entry       = @cast_to_db me, entry
-  type        = entry[ '~isa' ]
-  description = me[ 'description' ]
-  pk_name     = description[ 'primary-keys' ]?[ type ]
-  throw new Error "unable to find a primary key for type #{rpr type} in DB" unless pk_name?
-  pk_value    = entry[ pk_name ]
-  throw new Error "unable to find a primary key in entry #{rpr entry}" unless pk_value?
-  me[ '%self' ].hmset "#{type}/#{pk_name}:#{pk_value}", entry, ( error, response ) =>
-    return handler error if error?
-    ### TAINT use async ###
-    sks         = description[ 'secondary-keys' ]?[ type ]
-    if sks?
-      for sk_name of sks
-        sk_value  = entry[ sk_name ]
-        continue unless sk_value?
-        me[ '%self' ].set "#{type}/#{sk_name}:#{sk_value}/#{pk_name}", pk_value, redis.print
-    handler null, null if handler?
-
-#-----------------------------------------------------------------------------------------------------------
-### TAINT should be using UID hint ###
-@get = ( me, uid, handler ) ->
-  ### TAINT should we demand type and ID? would work for entries of all types ###
-  type      = 'user'
-  pk_name   = 'uid'
-  pk_value  = uid
-  id        = "#{type}/#{pk_name}:#{pk_value}"
-  me[ '%self' ].hgetall id, ( error, entry ) =>
-    return handler error if error?
-    whisper '©42a', entry
-    handler null, @cast_from_db me, entry
-
-db = USERDB.new_db()
-db[ 'description' ] = @compile_description db, user_description
-
-user =
-  '~isa':   'user'
-  uid:      '3df843ac12'
-  name:     'just a user'
-  email:    'jauser@example.com'
-  password: 'secret'
-  age:      108
-  rating:   3.12
-  added:    new Date '2012-12-01T12:00:00Z'
-  asis:     42
+# #-----------------------------------------------------------------------------------------------------------
+# @compile_description = ( me, description ) ->
+#   types   = {}
+#   codecs  = {}
+#   pks     = {}
+#   sks     = {}
+#   #.........................................................................................................
+#   R       =
+#     '%codecs':        codecs
+#     'schema':         description[ 'schema' ]
+#     'indexes':        description[ 'indexes' ]
+#     'primary-keys':   pks
+#     'secondary-keys': sks
+#   #.........................................................................................................
+#   for type, type_info of description[ 'types' ]
+#     continue if ( info_type = TYPES.type_of type_info ) is 'text'
+#     throw new Error "expected a text or a POD, got a #{info_type}" if info_type isnt 'pod'
+#     types[ type ] = codec = {}
+#     codec[ 'read'  ] = type_info[ 'read'  ] ? id
+#     codec[ 'write' ] = type_info[ 'write' ] ? id
+#   #.........................................................................................................
+#   for type, type_info of description[ 'types' ]
+#     continue unless ( info_type = TYPES.type_of type_info ) is 'text'
+#     codec = types[ type_info ]
+#     throw new Error "unknown USERDB data type: #{rpr type}" unless codec?
+#     types[ type ] = codec
+#   #.........................................................................................................
+#   for entry_type, type_info of description[ 'schema' ]
+#     for field_name, type_name of type_info
+#       codec = types[ type_name ]
+#       throw new Error "unknown USERDB data type: #{rpr type}" unless codec?
+#       codecs[ field_name ] = codec
+#   #.........................................................................................................
+#   for type_name, type_info of description[ 'indexes' ]
+#     pk = null
+#     for field_name, index_info of type_info
+#       if index_info isnt true
+#         continue if ( index_info_type = TYPES.type_of index_info ) is 'pod'
+#         throw new Error "unsupported index value #{rpr index_info}" if index_info is false
+#         throw new Error "unsupported index value type #{rpr index_info_type}"
+#       if pk?
+#         throw new Error "illegal to specify both #{rpr pk} and #{rpr field_name} as primary keys"
+#       pks[ type_name ] = pk = field_name
+#   #.........................................................................................................
+#   throw new Error "must configure one primary key, got none" unless pk?
+#   #.........................................................................................................
+#   for type_name, type_info of description[ 'indexes' ]
+#     for field_name, index_info of type_info
+#       continue if index_info is true
+#       for pk_name, index_value of index_info
+#         index_value_type = TYPES.type_of index_value
+#         throw new Error "unsupported index value #{rpr index_value}" if index_value is false
+#         throw new Error "unsupported index value type #{rpr index_value_type}" if index_value isnt true
+#         throw new Error "illegal field name #{rpr field_name}" if pk_name isnt pk
+#         ( sks[ type_name ]?= {} )[ field_name ] = true
+#   #.........................................................................................................
+#   return R
 
 
-# warn @cast_to_db db, user
-# info @cast_from_db db, @cast_to_db db, user
-@_build_indexes db, user
 
-@get db, '3df843ac12', ( error, entry ) ->
-  throw error if error?
-  log TRM.lime entry
+# #-----------------------------------------------------------------------------------------------------------
+# @cast_to_db = ( me, pod ) ->
+#   R = {}
+#   codecs = me[ 'description' ][ '%codecs' ]
+#   for name, value of pod
+#     R[ name ] = ( codecs[ name ]?[ 'write' ] ? identity ) value
+#   return R
 
-redb = redis.createClient()
-redb.select 5, redis.print
-# TRM.dir redis
-redb = redb.multi()
-redb = redb.set 'a', 3, ( error, results ) -> if error then warn error else TRM.green results
-redb = redb.lpop 'a',   ( error, results ) -> if error then warn error else TRM.green results
-redb = redb.set 'a', 4, ( error, results ) -> if error then warn error else TRM.green results
-redb = redb.exec ( error, results ) ->
-  whisper error
-  throw error if error?
-  debug results
+# #-----------------------------------------------------------------------------------------------------------
+# @cast_from_db = ( me, pod ) ->
+#   codecs = me[ 'description' ][ '%codecs' ]
+#   warn codecs
+#   for name, text of pod
+#     pod[ name ] = ( codecs[ name ]?[ 'read' ] ? identity ) text
+#   return pod
 
-
-# TRM.dir redb
-# redb.on "error", ( error ) ->
-#   warn "Error: #{rpr error}"
-
-# test = ( handler ) ->
-#   redb.set "string key", "string val", redis.print
-#   redb.hset "hash key", "hashtest 1", "some value", redis.print
-#   redb.hset [ 'uid:3425', 'foo', 42, ], redis.print
-#   redb.hset [ 'uid:3425', 'bar', 108, ], redis.print
-#   redb.hmset 'uid:3425', plotz: 'hotz', fizz: 'buzz', name: '𪜈', hazcheese: yes, cheese: null, redis.print
-#   redb.hmset [ 'uid:3425', 'patz', 'futz', ], redis.print
-#   redb.hgetall 'uid:3425', ( error, results ) ->
+# #-----------------------------------------------------------------------------------------------------------
+# @_build_indexes = ( me, entry, handler ) ->
+#   entry       = @cast_to_db me, entry
+#   type        = entry[ '~isa' ]
+#   description = me[ 'description' ]
+#   pk_name     = description[ 'primary-keys' ]?[ type ]
+#   throw new Error "unable to find a primary key for type #{rpr type} in DB" unless pk_name?
+#   pk_value    = entry[ pk_name ]
+#   throw new Error "unable to find a primary key in entry #{rpr entry}" unless pk_value?
+#   me[ '%self' ].hmset "#{type}/#{pk_name}:#{pk_value}", entry, ( error, response ) =>
 #     return handler error if error?
-#     handler null, results
-#   redb.keys '*', ( error, results ) ->
+#     ### TAINT use async ###
+#     sks         = description[ 'secondary-keys' ]?[ type ]
+#     if sks?
+#       for sk_name of sks
+#         sk_value  = entry[ sk_name ]
+#         continue unless sk_value?
+#         me[ '%self' ].set "#{type}/#{sk_name}:#{sk_value}/#{pk_name}", pk_value, redis.print
+#     handler null, null if handler?
+
+# #-----------------------------------------------------------------------------------------------------------
+# ### TAINT should be using UID hint ###
+# @get = ( me, uid, handler ) ->
+#   ### TAINT should we demand type and ID? would work for entries of all types ###
+#   type      = 'user'
+#   pk_name   = 'uid'
+#   pk_value  = uid
+#   id        = "#{type}/#{pk_name}:#{pk_value}"
+#   me[ '%self' ].hgetall id, ( error, entry ) =>
 #     return handler error if error?
-#     handler null, results
-#     redb.quit()
+#     whisper '©42a', entry
+#     handler null, @cast_from_db me, entry
 
-debug ( new Date ).toISOString()
+# db = USERDB.new_db()
+# db[ 'description' ] = @compile_description db, user_description
 
-# test ( error, results ) ->
+# user =
+#   '~isa':   'user'
+#   uid:      '3df843ac12'
+#   name:     'just a user'
+#   email:    'jauser@example.com'
+#   password: 'secret'
+#   age:      108
+#   rating:   3.12
+#   added:    new Date '2012-12-01T12:00:00Z'
+#   asis:     42
+
+
+# # warn @cast_to_db db, user
+# # info @cast_from_db db, @cast_to_db db, user
+# @_build_indexes db, user
+
+# @get db, '3df843ac12', ( error, entry ) ->
 #   throw error if error?
-#   info results
+#   log TRM.lime entry
+
+# redb = redis.createClient()
+# redb.select 5, redis.print
+# # TRM.dir redis
+# redb = redb.multi()
+# redb = redb.set 'a', 3, ( error, results ) -> if error then warn error else TRM.green results
+# redb = redb.lpop 'a',   ( error, results ) -> if error then warn error else TRM.green results
+# redb = redb.set 'a', 4, ( error, results ) -> if error then warn error else TRM.green results
+# redb = redb.exec ( error, results ) ->
+#   whisper error
+#   throw error if error?
+#   debug results
+
+
+# # TRM.dir redb
+# # redb.on "error", ( error ) ->
+# #   warn "Error: #{rpr error}"
+
+# # test = ( handler ) ->
+# #   redb.set "string key", "string val", redis.print
+# #   redb.hset "hash key", "hashtest 1", "some value", redis.print
+# #   redb.hset [ 'uid:3425', 'foo', 42, ], redis.print
+# #   redb.hset [ 'uid:3425', 'bar', 108, ], redis.print
+# #   redb.hmset 'uid:3425', plotz: 'hotz', fizz: 'buzz', name: '𪜈', hazcheese: yes, cheese: null, redis.print
+# #   redb.hmset [ 'uid:3425', 'patz', 'futz', ], redis.print
+# #   redb.hgetall 'uid:3425', ( error, results ) ->
+# #     return handler error if error?
+# #     handler null, results
+# #   redb.keys '*', ( error, results ) ->
+# #     return handler error if error?
+# #     handler null, results
+# #     redb.quit()
+
+# debug ( new Date ).toISOString()
+
+# # test ( error, results ) ->
+# #   throw error if error?
+# #   info results
 
 
 

@@ -1,42 +1,10 @@
 {
   "protocol": "http",
   "hostname": "localhost",
-  "port": 9200,
-  "base-route": "/",
-  "collection-name": "users",
+  "port": 6379,
+  "collection-idx": 1,
   "bcrypt": {
     "rounds": 10
   },
-  "description": {
-    "mappings": {
-      "user": {
-        "properties": {
-          "_id": {
-            "type": "string",
-            "path": "uid"
-          },
-          "~isa": {
-            "type": "string",
-            "index": "not_analyzed"
-          },
-          "name": {
-            "type": "string",
-            "index": "not_analyzed"
-          },
-          "uid": {
-            "type": "string",
-            "index": "not_analyzed"
-          },
-          "password": {
-            "type": "string",
-            "index": "not_analyzed"
-          },
-          "email": {
-            "type": "string",
-            "index": "not_analyzed"
-          }
-        }
-      }
-    }
-  }
+  "description": {}
 }

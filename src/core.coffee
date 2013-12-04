@@ -38,7 +38,11 @@ default_options           = require '../options'
   collection_idx    = R[ 'collection-idx' ] ? 0
   # debug '©23a', 'caveat substratum'
   R[ '%self' ]      = substrate = redis.createClient R[ 'port' ], R[ 'host' ]
-  substrate.select collection_idx, redis.print
+  #.........................................................................................................
+  ### TAINT may not this result in collection not already selected when function returns?
+  It did seem to work in the tests, though. ###
+  substrate.select collection_idx, ( error, response ) =>
+    throw error if error?
   #.........................................................................................................
   return R
 

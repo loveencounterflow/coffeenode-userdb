@@ -107,7 +107,7 @@ _write_json = ( value ) -> JSON.stringify value
 #-----------------------------------------------------------------------------------------------------------
 @_build_indexes = ( me, entry, pkn_and_skns, handler ) ->
   ### This method performs the lowlevel gruntwork necessary to represent an entry in the Redis DB. In
-  particular, it issues a HMSET user/uid:$uid k0 v0 k1 v1 ...` command to save the the entry as a Redis
+  particular, it issues a HMSET user/uid:$uid k0 v0 k1 v1 ...` command to save the entry as a Redis
   hash; then, it issues commands like `SET user/email:$email/uid $uid` and others (as configured in the data
   type description) to make the entry retrievable using secondary unique keys (such as email address). ###
   [ pkn, skns, ]  = pkn_and_skns
@@ -116,17 +116,17 @@ _write_json = ( value ) -> JSON.stringify value
   record          = @_cast_to_db me, prk, entry
   type            = record[ '~isa' ]
   #.........................................................................................................
+  add = ( srk_and_prk, done ) ->
+    [ srk, prk, ] = srk_and_prk
+    me[ '%self' ].set srk, prk, done
+  #.........................................................................................................
   me[ '%self' ].hmset prk, record, ( error, response ) =>
     return handler error if error?
     return handler null, record unless srks.length > 0
     #.......................................................................................................
-    tasks = []
-    for srk in srks
-      do ( srk ) =>
-        tasks.push ( done ) =>
-          me[ '%self' ].set srk, prk, done
+    srks_and_prks = ( [ srk, prk ] for srk in srks when srk? )
     #.......................................................................................................
-    async.parallel tasks, ( error, results ) =>
+    async.each srks_and_prks, add, ( error ) =>
       return handler error if error?
       handler null, record
   #.........................................................................................................
@@ -262,15 +262,31 @@ _write_json = ( value ) -> JSON.stringify value
 
 #-----------------------------------------------------------------------------------------------------------
 @_primary_record_key_from_id_triplet = ( me, P... ) ->
-  debug '©77g', P
+  ### TAINT shares code with `_secondary_record_key_from_id_triplet` ###
   switch arity = P.length + 1
     when 2 then P = P[ 0 ]
     when 4 then null
     else throw new Error "expected two or four arguments, got #{arity}"
-  ### TAINT should escape strings ###
   throw new Error "expected list with three elements, got one with #{P.length}" unless P.length is 3
+  #.........................................................................................................
   [ type, pkn, pkv, ] = P
-  return "#{type}/#{pkn}:#{pkv}"
+  pkvx                = @escape_key_value_crumb me, pkv
+  #.........................................................................................................
+  return "#{type}/#{pkn}:#{pkvx}"
+
+#-----------------------------------------------------------------------------------------------------------
+@_secondary_record_key_from_id_triplet = ( me, P... ) ->
+  ### TAINT shares code with `_primary_record_key_from_id_triplet` ###
+  switch arity = P.length + 1
+    when 2 then P = P[ 0 ]
+    when 4 then null
+    else throw new Error "expected two or four arguments, got #{arity}"
+  throw new Error "expected list with three elements, got one with #{P.length}" unless P.length is 3
+  #.........................................................................................................
+  [ type, skn, skv, ] = P
+  skvx                = @escape_key_value_crumb me, skv
+  #.........................................................................................................
+  return "#{type}/#{skn}:#{skvx}/~prk"
 
 #-----------------------------------------------------------------------------------------------------------
 @_id_triplet_from_hint = ( me, id_hint ) ->
@@ -289,6 +305,11 @@ _write_json = ( value ) -> JSON.stringify value
   * entry -> id
   * record -> cast-from-db record
   ###
+
+  # must return type of key ('prk' or 'srk')
+  # we always need a type
+  # so [ 'user', uid ] gives { key_type: 'prk', pkn: 'uid', pkv: uid, }
+  # and [ 'user', 'email', email ] gives { key_type: 'srk', skn: 'email', skv: email, } ???
 
   switch type_of_hint = TYPES.type_of id_hint
     #.......................................................................................................
@@ -357,18 +378,20 @@ _write_json = ( value ) -> JSON.stringify value
 @_get_primary_and_secondary_record_keys = ( me, entry, pkn_and_skns ) ->
   [ pkn
     skns ]  = pkn_and_skns
-  pkv       = entry[ pkn ]              # Primary Key Value
-  throw new Error "unable to find a primary key (#{rpr pk_name}) in entry #{rpr entry}" unless pkv?
+  srks      = []
+  #.........................................................................................................
   type      = entry[ '~isa' ]
-  ### TAINT consider escaping ###
+  pkv       = entry[ pkn ]
+  throw new Error "unable to find a primary key (#{rpr pk_name}) in entry #{rpr entry}" unless pkv?
   prk       = @_primary_record_key_from_id_triplet me, type, pkn, pkv
-  srks      = []                        # Secondary Record Keys
   R         = [ prk, srks, ]
   #.........................................................................................................
   for skn in skns
-    ### TAINT consider escaping ###
-    if ( skv = entry[ skn ] )? then srks.push "#{type}/#{skn}:#{skv}/~prk"
-    else                            srks.push undefined
+    if ( skv = entry[ skn ] )?
+      srk = @_secondary_record_key_from_id_triplet me, type, skn, skv
+      srks.push srk
+    else
+      srks.push undefined
   #.........................................................................................................
   return R
 
@@ -386,6 +409,50 @@ crumb = '([^/:\\s]+)'
   match = prk.match @_prk_matcher
   throw new Error "illegal PRK: #{rpr prk}" unless match?
   return match[ 1 .. 3 ]
+
+#-----------------------------------------------------------------------------------------------------------
+@split_secondary_record_key = ( me, srk ) ->
+  match = srk.match @_srk_matcher
+  throw new Error "illegal SRK: #{rpr srk}" unless match?
+  return match[ 1 .. 3 ]
+
+
+
+#===========================================================================================================
+# KEY ESCAPING
+#-----------------------------------------------------------------------------------------------------------
+@escape_key_value_crumb = ( me, text ) ->
+  ### Given a text that is intended to be used inside a Redis structured (URL-like) key, return it escaped
+  so that the systematic characters—space, slash, and colon—are replaced by `+_`, `+,`, and `+.`,
+  respectively; plus signs will be encoded as `++`. Examples:
+
+  * key without escaping:   `user/name:Just A. User/~prk`
+  * value crumb:            `Just A. User`
+  * value crumb escaped:    `Just+_A.+_User`
+  * key with escaping:      `user/name:Just+_A.+_User/~prk`
+
+  * key without escaping:   `user/url:http://example.com/foo/bar//~prk`
+  * value crumb:            `http://example.com/foo/bar/`
+  * value crumb escaped:    `http+.+,+,example.com+,foo+,bar+,`
+  * key with escaping:      `user/url:http+.+,+,example.com+,foo+,bar+,/~prk`
+
+  ###
+  R = text
+  R = R.replace /\+/g,    '++'
+  R = R.replace /\x20/g,  '+_'
+  R = R.replace /\//g,    '+,'
+  R = R.replace /\:/g,    '+.'
+  return R
+
+#-----------------------------------------------------------------------------------------------------------
+@unescape_key_value_crumb = ( me, text ) ->
+  ### Reverse the effect of applying `escape_key_value_crumb`. ###
+  R = text
+  R = R.replace /\+_/g,   ' '
+  R = R.replace /\+,/g,   '/'
+  R = R.replace /\+\./g,  ':'
+  R = R.replace /\+\+/g,  '+'
+  return R
 
 
 #===========================================================================================================

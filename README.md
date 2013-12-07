@@ -1,8 +1,12 @@
 
 
 - [CoffeeNode UserDB](#coffeenode-userdb)
-  - [What is it?](#what-is-it)
-  - [Why ElasticSearch?](#why-elasticsearch)
+	- [What is it?](#what-is-it)
+	- [Why Redis (and not ElasticSearch)?](#why-redis-and-not-elasticsearch)
+	- [Configuration](#configuration)
+- [Terminology](#terminology)
+		- [Entry Hints (Record Hints)](#entry-hints-record-hints)
+	- [Restrictions on Secondary Field Values](#restrictions-on-secondary-field-values)
 
 > **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
@@ -154,6 +158,123 @@ user/uid:9a4c88dbc084/tags: {
   'python'
   'c++'         }
 ```
+
+
+### Entry Hints (Record Hints)
+
+Primary record:
+
+* `user/uid:17c07627d35e: {"name":"Alice","password":"$2a$10$T8RGrZdn6gYd4WV…`
+
+Secondary records:
+
+* `user/email:alice@hotmail.com/~prk: 'user/uid:17c07627d35e'`
+* `user/name:Alice/~prk:              'user/uid:17c07627d35e'`
+
+Entry hints may have one of the following formats:
+
+* using an existing entry
+
+* using the PRK or an SRK:
+
+  * `'user/email:alice@hotmail.com/~prk'`
+  * `'user/name:Alice/~prk'`
+  * `'user/uid:17c07627d35e'`
+
+* using triplets spelling out type, field name, and field value:
+
+  * `[ 'user', 'email', 'alice@hotmail.com', ]`
+  * `[ 'user', 'name',  'Alice',             ]`
+  * `[ 'user', 'uid',   '17c07627d35e',      ]`
+
+* using a type / PKV pair:
+
+  * `[ 'user', '17c07627d35e', ]`
+
+Since 'user-specific' methods such as `get_user` already assume type 'user', those methods accept, in
+addition to the above, the follwoing formats as entry hints:
+
+* using the UID:
+
+  * `'17c07627d35e'`
+
+* field name / field value pairs:
+
+  * `[ 'email', 'alice@hotmail.com', ]`
+  * `[ 'name',  'Alice',             ]`
+  * `[ 'uid',   '17c07627d35e',      ]`
+
+You can *not* use type / PKV pair with the user-specific methods, as those would clash with field name /
+field value pairs.
+
+It is possible to use `*` as field name; this will be understood as referring to any one of the secondary
+record fields:
+
+* `[ '*', 'alice@hotmail.com', ]`
+* `[ '*', 'Alice', ]`
+
+Note that in order for this to work correctly, we have yet to implement XXXXXXXX XXXXXXXX XXXXXXXX
+
+## Restrictions on Secondary Field Values
+
+The values of secondary keys must obey to the following constraints:
+
+* they must be **string** values;
+* they must be **non-empty**;
+* they must be **unique** over all existing secondary key values *for the given type*.
+
+The last constraint can also be expressed as follows: a given secondary key value `skv` is a valid choice
+for a new entry of type `t` only if at that moment in time no SRK exists in the DB that would match
+`$t/*:$skv/~prk`—meaning that Bob cannot opt for user name `alice@example.org` if Alice happened to have
+registered that value for her email (or her user name, or any other secondary field) earlier.
+
+At this point it may be worthwhile to shortly discuss what the reasons for the above constraints are and
+where the strong and weak points of the schema lie. And, or course, what we can do to spare Alice the
+embarassing moment she realizes her legitmate, world-wide unique email has already (seemingly) be grabbed
+by some Bob, otherwise unrelated to her.
+
+The first constraint is of immediate practical utility: all values in Redis are strings, and although we can
+always come up with arbitrary byte sequences to represent values of any type, it would be somewhat awkward
+to do that with record keys, and of little use.
+
+The second point grows out of a formalistic vantage point: if you have a collection data type `t` that
+accommodates a variable number of elements, then it holds true that all instances of `t` with zero elements
+are pairwaise equal–in other words, there is just a single empty list, a single empty dictionary, a single
+empty string in the world. Now, primary and secondary keys are intended to be used as unique identifiers of
+Db entities, and it is again the awkwardness of using a 'nothingness' of data for that job. Beyond that,
+empty strings are special in that the 'have no letters' to write them down. Imagine your phone number had
+zero digits—how would anyone ever call you? So we rule out this case. That said, it is of course sound to
+restrict a user-generated secondary key, say, the user name, to a certain minimal and maximal length.
+
+The third and last point grew out of the observation that more and more webapplications have become to
+accept any one single uniqely identifying piece of data in a general, one-for-all field: for example, you
+might use your customer number, your registered email address, or maybe even one of your past invoice
+numbers (and a password) to log into some online shop system, without having to specify what you specified.
+Such a feature is of high utility to content providers and web users alike—companies enjoy a higher ratio
+of returning customers (who log in because they can, instead of hunting for an elusive customer ID buried in
+a pile of paper), and web users can concentrate on remembering that damn password (a feat that is provably
+too hard for those who have to remember more than a few, so let's try to make it not even harder).
+
+So 'type-global uniqueness of all secondary ID values'—which is what the third constraint boils down to—is
+born out of a pragmatic view. We have limited abilities to search data in Redis, and using patterns against
+keys is one of the very precious, very few advanced techniques (short of iterating over all values, or
+selecting ranges in a list or sorted set). In fact, i've looked into many a NoSQL / Key-Value Store /
+GraphDB system over the past few years, and a great lot of systems has a much too limited way to search or
+filter data for my taste. Redis seems to strike an interesting balance.
+
+The third constraint allows us to fully leverage the power of Natural Keys ('Sprechende Schlüssel' in
+German, that's 'eloquent keys'—a very eloquent name!). You have an ID you know we know, you want to log in
+with us and don't know slash don't *care* whether it's your email? your nickname? your customer or invoice
+number? your Social Security ID maybe? Well if it's all `#*!$` to you, then let it be
+`user/*:YOURDATAHERE/~prk` to us. No problem!
+
+In closing, let us have a look at how to avoid any possible embarassed Alices:
+
+
+
+
+
+
 
 
 

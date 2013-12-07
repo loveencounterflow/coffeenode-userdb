@@ -22,6 +22,10 @@ help                      = TRM.get_logger 'help',    badge
 echo                      = TRM.echo.bind TRM
 #...........................................................................................................
 eventually                = process.nextTick
+#...........................................................................................................
+### TAINT these random seeds should probably not be hardcoded. Consider to replace them by something like
+`new Date() / somenumber` in production. ###
+create_rnd_id             = BAP.get_create_rnd_id 8327, 32
 
 
 #-----------------------------------------------------------------------------------------------------------
@@ -48,9 +52,8 @@ eventually                = process.nextTick
   entry[ '~isa' ]     = type = 'user'
   [ pkn, skns, ]      = pkn_and_skns = @_key_names_from_type me, type
   ### TAINT should allow client to configure ID length ###
-  # entry[ pkn ]         = BAP.create_random_id [ entry[ 'email' ], entry[ 'name' ], ], 12
-  warn "TESTING: IDs are not randomized"
-  entry[ pkn ]        = BAP.create_id        [ entry[ 'email' ], entry[ 'name' ], ], 12
+  ### TAINT using the default setup, IDs are replayable (but still depending on user inputs) ###
+  entry[ pkn ]        = create_rnd_id [ entry[ 'email' ], entry[ 'name' ], ], 12
   ### TAINT we use constant field names here—not very abstract... ###
   entry[ 'added' ]    = new Date()
   password            = entry[ 'password' ]

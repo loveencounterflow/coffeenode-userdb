@@ -19,7 +19,8 @@
       "primary-key": "uid",
       "secondary-keys": [
         "email",
-        "name"
+        "name",
+        "nonexistent"
       ]
     }
   }

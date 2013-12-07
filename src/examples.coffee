@@ -208,28 +208,28 @@ USERDB                    = require './main'
   for uid_hint in ok_uid_hints
     log()
     log TRM.cyan rpr uid_hint
-    log TRM.yellow USERDB._id_facet_from_hint db, uid_hint
+    log TRM.yellow USERDB._id_triplet_from_hint db, uid_hint
   #.........................................................................................................
   try
-    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 0 ]
+    USERDB._id_triplet_from_hint db, not_ok_uid_hints[ 0 ]
     throw new Error "should not have passed"
   catch error
     throw error unless error[ 'message' ] is "expected a list with two elements, got one with 1 elements"
   #.........................................................................................................
   try
-    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 1 ]
+    USERDB._id_triplet_from_hint db, not_ok_uid_hints[ 1 ]
     throw new Error "should not have passed"
   catch error
     throw error unless error[ 'message' ] is "expected a list with two elements, got one with 3 elements"
   #.........................................................................................................
   try
-    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 2 ]
+    USERDB._id_triplet_from_hint db, not_ok_uid_hints[ 2 ]
     throw new Error "should not have passed"
   catch error
     throw error unless error[ 'message' ] is "unable to get ID facet from value of type XXXXXXXXXX"
   #.........................................................................................................
   try
-    USERDB._id_facet_from_hint db, not_ok_uid_hints[ 3 ]
+    USERDB._id_triplet_from_hint db, not_ok_uid_hints[ 3 ]
     throw new Error "should not have passed"
   catch error
     throw error unless error[ 'message' ] is "expected a POD with a single facet, got one with 2 facets"

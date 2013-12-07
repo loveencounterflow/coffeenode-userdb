@@ -37,7 +37,10 @@
         "lib/users.js": 1,
         "lib/passwords.js": 1,
         "lib/templates.js": 1,
-        "lib/web.js": 1
+        "lib/web.js": 1,
+        "lib/dump.js": 1,
+        "lib/email.js": 1,
+        "lib/integrity.js": 1
       }
     }
   },

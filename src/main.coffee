@@ -21,11 +21,12 @@ help                      = TRM.get_logger 'help',    badge
 echo                      = TRM.echo.bind TRM
 #...........................................................................................................
 mixins = [
-  userdb_core               = require './core'
-  userdb_users              = require './users'
-  userdb_passwords          = require './passwords'
-  # userdb_web                = require './web'
-  ]
+  require './core'
+  require './users'
+  require './passwords'
+  require './dump'
+  # require './web'
+  require './integrity' ]
 #...........................................................................................................
 USERDB                    = @
 

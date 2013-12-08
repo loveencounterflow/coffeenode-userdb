@@ -177,15 +177,15 @@ Entry hints may have one of the following formats:
 
 * using the PRK or an SRK:
 
+  * `'user/uid:17c07627d35e'`
   * `'user/email:alice@hotmail.com/~prk'`
   * `'user/name:Alice/~prk'`
-  * `'user/uid:17c07627d35e'`
 
 * using triplets spelling out type, field name, and field value:
 
+  * `[ 'user', 'uid',   '17c07627d35e',      ]`
   * `[ 'user', 'email', 'alice@hotmail.com', ]`
   * `[ 'user', 'name',  'Alice',             ]`
-  * `[ 'user', 'uid',   '17c07627d35e',      ]`
 
 * using a type / PKV pair:
 
@@ -200,11 +200,11 @@ addition to the above, the follwoing formats as entry hints:
 
 * field name / field value pairs:
 
+  * `[ 'uid',   '17c07627d35e',      ]`
   * `[ 'email', 'alice@hotmail.com', ]`
   * `[ 'name',  'Alice',             ]`
-  * `[ 'uid',   '17c07627d35e',      ]`
 
-You can *not* use type / PKV pair with the user-specific methods, as those would clash with field name /
+You can *not* use type / PKV pairs with the user-specific methods, as those would clash with field name /
 field value pairs.
 
 It is possible to use `*` as field name; this will be understood as referring to any one of the secondary

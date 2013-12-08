@@ -290,58 +290,57 @@ _write_json = ( value ) -> JSON.stringify value
 
 #-----------------------------------------------------------------------------------------------------------
 @_id_triplet_from_hint = ( me, id_hint ) ->
-  # ### Given a hint for a unique entry identifier, return a list `[ id_name, id_value, ]` that spells out
-  # the field name and value to match. An `id_hint` may be **(1)** a list, in which case it must have two
-  # elements (that form a name / value pair), and the first value must be a non-empty text; **(2)** an object
-  # (a POD) of type `user`, in which case the result of `USERDB._id_facet_from_entry` will be returned;
-  # **(3)** an object (a POD) of the format `{ $id_name: $id_value }` with a single name and value; **(4)**
-  # a value of any other type such as a text or a number; in this case, the ID mapping configured in the
-  # UserDB options will be used to determine the ID field name. ###
 
   ###
-  * 'text' -> prk
-  * [ 'text', 'text', ] -> [ type, pkv, ]
-  * { 'text': 'text', } -> [ pkn,  pkv, ] or [ skn,  skv, ]
-  * entry -> id
-  * record -> cast-from-db record
+
+
+  * using an existing entry
+
+  * using the PRK or an SRK:
+
+    * `'user/uid:17c07627d35e'`
+    * `'user/email:alice@hotmail.com/~prk'`
+    * `'user/name:Alice/~prk'`
+
+  * using triplets spelling out type, field name, and field value:
+
+    * `[ 'user', 'uid',   '17c07627d35e',      ]`
+    * `[ 'user', 'email', 'alice@hotmail.com', ]`
+    * `[ 'user', 'name',  'Alice',             ]`
+
+  * using a type / PKV pair:
+
+    * `[ 'user', '17c07627d35e', ]`
+
+
   ###
 
-  # must return type of key ('prk' or 'srk')
-  # we always need a type
-  # so [ 'user', uid ] gives { key_type: 'prk', pkn: 'uid', pkv: uid, }
-  # and [ 'user', 'email', email ] gives { key_type: 'srk', skn: 'email', skv: email, } ???
 
   switch type_of_hint = TYPES.type_of id_hint
     #.......................................................................................................
     when 'list'
       #.....................................................................................................
-      unless ( length = id_hint.length ) is 2
-        throw new Error "expected a list with two elements, got one with #{length} elements"
+      switch ( length = id_hint.length )
+        when 2
+          [ type, pkv,  ] = id_hint
+          [ pkn,  skns, ] = @_key_names_from_type me, type
+          return [ type, pkn, pkv, ]
+        when 3
+          [ type, pskn, pskv ] = id_hint
+          [ pkn,  skns, ] = @_key_names_from_type me, type
+          return [ type, pskn, pskv, ] if pskn is pkn
+          return [ type, pskn, pskv, ] if skns.indexOf pskn > -1
+          throw new Error "hint has PKN or SKN #{rpr pskn}, but schema has #{type}: #{[ pkn, skns ]}"
+        else
+          throw new Error "expected a list with two or three elements, got one with #{length} elements"
       #.....................................................................................................
-      [ type, id, ] = id_hint
       pkn           = @_primary_key_name_from_type me, type
       return [ type, pkn, id, ]
-    # #.......................................................................................................
-    # when 'user'
-    #   return @_id_facet_from_entry me, id_hint
-    # #.......................................................................................................
-    # when 'pod'
-    #   #.....................................................................................................
-    #   facets = ( [ name, value, ] for name, value of id_hint )
-    #   #.....................................................................................................
-    #   unless ( length = facets.length ) is 1
-    #     throw new Error "expected a POD with a single facet, got one with #{length} facets"
-    #   #.....................................................................................................
-    #   R = [ id_name, id_value, ] = facets[ 0 ]
-    #   #.....................................................................................................
-    #   unless id_name.length > 0
-    #     throw new Error "expected ID name to be a non-empty text, got an empty text"
-    #   #.....................................................................................................
-    #   return R
     #.......................................................................................................
     when 'text'
-      ### When the hint is a text, it is understood as a Primary Record Key: ###
-      return @split_primary_record_key me, id_hint
+      ### When the hint is a text, it is understood as a Primary or Secondary Record Key: ###
+      return R if ( R = @split_record_key me, id_hint, null )?
+      throw new Error "unable to get ID facet from #{rpr id_hint}"
   #.........................................................................................................
   throw new Error "unable to get ID facet from value of type #{type_of_hint}"
 
@@ -405,17 +404,29 @@ crumb = '([^/:\\s]+)'
 @_srk_matcher = /// ^ #{crumb} / #{crumb} : #{crumb} / ~prk $ ///
 
 #-----------------------------------------------------------------------------------------------------------
-@split_primary_record_key = ( me, prk ) ->
+@split_record_key = ( me, rk, fallback ) ->
+  R = @split_primary_record_key   me, rk, null
+  R = @split_secondary_record_key me, rk, null unless R?
+  unless R?
+    return fallback unless fallback is undefined
+    throw new Error "illegal PRK / SRK: #{rpr rk}"
+  return R
+
+#-----------------------------------------------------------------------------------------------------------
+@split_primary_record_key = ( me, prk, fallback ) ->
   match = prk.match @_prk_matcher
-  throw new Error "illegal PRK: #{rpr prk}" unless match?
+  unless match?
+    return fallback unless fallback is undefined
+    throw new Error "illegal PRK: #{rpr prk}"
   return match[ 1 .. 3 ]
 
 #-----------------------------------------------------------------------------------------------------------
-@split_secondary_record_key = ( me, srk ) ->
+@split_secondary_record_key = ( me, srk, fallback ) ->
   match = srk.match @_srk_matcher
-  throw new Error "illegal SRK: #{rpr srk}" unless match?
+  unless match?
+    return fallback unless fallback is undefined
+    throw new Error "illegal SRK: #{rpr srk}"
   return match[ 1 .. 3 ]
-
 
 
 #===========================================================================================================

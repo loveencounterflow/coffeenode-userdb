@@ -1,6 +1,6 @@
 {
   "name": "coffeenode-userdb",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "ERROR: No README data found!",
   "main": "lib/main.js",
   "scripts": {
@@ -40,11 +40,12 @@
         "lib/web.js": 1,
         "lib/dump.js": 1,
         "lib/email.js": 1,
-        "lib/integrity.js": 1
+        "lib/integrity.js": 1,
+        "lib/tests.js": 1
       }
     }
   },
   "readmeFilename": "README.md",
   "readme": "ERROR: No README data found!",
-  "_id": "coffeenode-userdb@0.0.3"
+  "_id": "coffeenode-userdb@0.0.4"
 }

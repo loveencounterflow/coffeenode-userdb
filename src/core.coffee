@@ -164,13 +164,8 @@ _write_json = ( value ) -> JSON.stringify value
 # KEY RETRIEVAL
 #-----------------------------------------------------------------------------------------------------------
 @walk_keys = ( me, pattern, handler ) ->
-  ### Given a `pattern`, yield matching keys in the DB one by one; after the last key, a `null` is yielded
-  to indicate the end of the listing. Glob-style patterns are supported; as per the Redis documentation:
-
-  *  `h?llo` matches `hello`, `hallo` and `hxllo`
-  *  `h*llo` matches `hllo` and `heeeello`
-  *  `h[ae]llo` matches `hello` and `hallo`, but not `hillo`
-  *  Use `\` to escape special characters if you want to match them verbatim. ###
+  ### Like `get_keys`, but calling `handler` once for each key found, and once with `null` after the last
+  key. ###
   #.........................................................................................................
   ### TAINT we're using the Redis < 2.8 `keys` command here, as the better Redis >= 2.8 `scan` command
   family is not yet available. Be aware that a Redis instance with lots of keys may become temporarily
@@ -392,7 +387,7 @@ _write_json = ( value ) -> JSON.stringify value
       * `'user/name:Alice/~prk'`
 
       Values given must be syntactically valid (i.e. they must parse when passed into one of the
-      `split_record_key` methods).
+      `split_*_record_key` methods).
 
     * **using triplets spelling out type, field name, and field value**:
 

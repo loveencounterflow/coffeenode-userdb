@@ -213,7 +213,6 @@ record fields:
 * `[ '*', 'alice@hotmail.com', ]`
 * `[ '*', 'Alice', ]`
 
-Note that in order for this to work correctly, we have yet to implement XXXXXXXX XXXXXXXX XXXXXXXX
 
 ## Restrictions on Secondary Field Values
 
@@ -230,7 +229,7 @@ registered that value for her email (or her user name, or any other secondary fi
 
 At this point it may be worthwhile to shortly discuss what the reasons for the above constraints are and
 where the strong and weak points of the schema lie. And, or course, what we can do to spare Alice the
-embarassing moment she realizes her legitmate, world-wide unique email has already (seemingly) be grabbed
+embarrassing moment she realizes her legitmate, world-wide unique email has already (seemingly) be grabbed
 by some Bob, otherwise unrelated to her.
 
 The first constraint is of immediate practical utility: all values in Redis are strings, and although we can
@@ -268,7 +267,16 @@ with us and don't know slash don't *care* whether it's your email? your nickname
 number? your Social Security ID maybe? Well if it's all `#*!$` to you, then let it be
 `user/*:YOURDATAHERE/~prk` to us. No problem!
 
-In closing, let us have a look at how to avoid any possible embarassed Alices:
+In closing, let us have a look at how to avoid any possible embarrassed Alices: it is conceptually simple,
+and the word is 'orthogonality of key values'. By this i mean that basically you should be able to tell what
+secondary key field any given legal secondary key value belongs to: an email contains a `@`; a web URL
+matches (at least) `/^https?://.+`; your invoice system may produce IDs with seven random digits, matching
+`/^[0-9]{7}$/`. Barring unusal (or illegal?—not sure) email addresses starting with `http://`, any string
+that complies with one these fields cannot comply with any other. All that remains is to implement a
+constraint on the other fields (like user name) so they can't be mistaken: Say, a user name cannot contain
+an `@` sign, cannot start with `http(s)://`, cannot just contain digits—and you're done: no more
+overlapping key values, no more embarrassed Alices.
+
 
 
 

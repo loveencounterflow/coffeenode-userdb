@@ -153,16 +153,16 @@ async                     = require 'async'
   db = USERDB.new_db()
   good_probes = [
     #.......................................................................................................
-    [ 'user/uid:17c07627d35e',                      [ 'prk', 'user', 'uid',     '17c07627d35e'        ], ]
-    [ [ 'user', 'uid',   '17c07627d35e',      ],    [ 'prk', 'user', 'uid',     '17c07627d35e',       ], ]
-    [ [ 'user', '17c07627d35e', ],                  [ 'prk', 'user', 'uid',     '17c07627d35e',       ], ]
-    [ [ 'user', 'some-uid' ],                       [ 'prk', 'user', 'uid',     'some-uid'            ], ]
-    [ 'user/uid:2db2e22a4db5',                      [ 'prk', 'user', 'uid',     '2db2e22a4db5'        ], ]
+    [ 'user/uid:17c07627d35e',                      [ 'prk', 'user/uid:17c07627d35e', 'user', 'uid',     '17c07627d35e'        ], ]
+    [ [ 'user', 'uid',   '17c07627d35e',      ],    [ 'prk', 'user/uid:17c07627d35e', 'user', 'uid',     '17c07627d35e',       ], ]
+    [ [ 'user', '17c07627d35e', ],                  [ 'prk', 'user/uid:17c07627d35e', 'user', 'uid',     '17c07627d35e',       ], ]
+    [ [ 'user', 'some-uid' ],                       [ 'prk', 'user/uid:some-uid',     'user', 'uid',     'some-uid'            ], ]
+    [ 'user/uid:2db2e22a4db5',                      [ 'prk', 'user/uid:2db2e22a4db5', 'user', 'uid',     '2db2e22a4db5'        ], ]
     #.......................................................................................................
-    [ 'user/email:alice@hotmail.com/~prk',          [ 'srk', 'user', 'email',   'alice@hotmail.com'   ], ]
-    [ 'user/name:Alice/~prk',                       [ 'srk', 'user', 'name',    'Alice'               ], ]
-    [ [ 'user', 'email', 'alice@hotmail.com', ],    [ 'srk', 'user', 'email',   'alice@hotmail.com',  ], ]
-    [ [ 'user', 'name',  'Alice',             ],    [ 'srk', 'user', 'name',    'Alice',              ], ]
+    [ 'user/email:alice@hotmail.com/~prk',          [ 'srk', 'user/email:alice@hotmail.com/~prk', 'user', 'email',   'alice@hotmail.com'   ], ]
+    [ [ 'user', 'email', 'alice@hotmail.com', ],    [ 'srk', 'user/email:alice@hotmail.com/~prk', 'user', 'email',   'alice@hotmail.com',  ], ]
+    [ 'user/name:Alice/~prk',                       [ 'srk', 'user/name:Alice/~prk',              'user', 'name',    'Alice'               ], ]
+    [ [ 'user', 'name',  'Alice',             ],    [ 'srk', 'user/name:Alice/~prk',              'user', 'name',    'Alice',              ], ]
     ]
   #.........................................................................................................
   bad_probes = [

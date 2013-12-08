@@ -1,6 +1,6 @@
 {
   "name": "coffeenode-userdb",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "ERROR: No README data found!",
   "main": "lib/main.js",
   "scripts": {
@@ -47,5 +47,5 @@
   },
   "readmeFilename": "README.md",
   "readme": "ERROR: No README data found!",
-  "_id": "coffeenode-userdb@0.0.5"
+  "_id": "coffeenode-userdb@0.0.6"
 }

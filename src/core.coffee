@@ -161,7 +161,7 @@ _write_json = ( value ) -> JSON.stringify value
 
 
 #===========================================================================================================
-# RETRIEVAL
+# KEY RETRIEVAL
 #-----------------------------------------------------------------------------------------------------------
 @walk_keys = ( me, pattern, handler ) ->
   ### Given a `pattern`, yield matching keys in the DB one by one; after the last key, a `null` is yielded
@@ -197,6 +197,9 @@ _write_json = ( value ) -> JSON.stringify value
   implementation. ###
   me[ '%self' ].keys pattern, handler
 
+
+#===========================================================================================================
+# RECORD & ENTRY RETRIEVAL
 #-----------------------------------------------------------------------------------------------------------
 @entry_from_record_key = ( me, prk, fallback, handler ) ->
   ### TAINT implement type casting for all Redis types ###
@@ -256,89 +259,42 @@ _write_json = ( value ) -> JSON.stringify value
   #.........................................................................................................
   return null
 
+
+#===========================================================================================================
+# KEY SYNTHESIS
 #-----------------------------------------------------------------------------------------------------------
 @_primary_record_key_from_hint = ( me, id_hint ) ->
   return @_primary_record_key_from_id_triplet me, @resolve_entry_hint me, id_hint
 
 #-----------------------------------------------------------------------------------------------------------
-@_primary_record_key_from_id_triplet = ( me, P... ) ->
+@primary_record_key_from_id_triplet = ( me, P... ) ->
   ### TAINT shares code with `_secondary_record_key_from_id_triplet` ###
   switch arity = P.length + 1
     when 2 then P = P[ 0 ]
     when 4 then null
     else throw new Error "expected two or four arguments, got #{arity}"
   throw new Error "expected list with three elements, got one with #{P.length}" unless P.length is 3
-  #.........................................................................................................
-  [ type, pkn, pkv, ] = P
-  pkvx                = @escape_key_value_crumb me, pkv
-  #.........................................................................................................
-  return "#{type}/#{pkn}:#{pkvx}"
+  return @_primary_record_key_from_id_triplet me, P...
 
 #-----------------------------------------------------------------------------------------------------------
-@_secondary_record_key_from_id_triplet = ( me, P... ) ->
+@secondary_record_key_from_id_triplet = ( me, P... ) ->
   ### TAINT shares code with `_primary_record_key_from_id_triplet` ###
   switch arity = P.length + 1
     when 2 then P = P[ 0 ]
     when 4 then null
     else throw new Error "expected two or four arguments, got #{arity}"
   throw new Error "expected list with three elements, got one with #{P.length}" unless P.length is 3
-  #.........................................................................................................
-  [ type, skn, skv, ] = P
-  skvx                = @escape_key_value_crumb me, skv
-  #.........................................................................................................
-  return "#{type}/#{skn}:#{skvx}/~prk"
+  return @_secondary_record_key_from_id_triplet me, P...
 
 #-----------------------------------------------------------------------------------------------------------
-@resolve_entry_hint = ( me, entry_hint ) ->
-  ###
+@_primary_record_key_from_id_triplet = ( me, type, pkn, pkv ) ->
+  pkvx = @escape_key_value_crumb me, pkv
+  return "#{type}/#{pkn}:#{pkvx}"
 
-
-  * using an existing entry
-
-  * using the PRK or an SRK:
-
-    * `'user/uid:17c07627d35e'`
-    * `'user/email:alice@hotmail.com/~prk'`
-    * `'user/name:Alice/~prk'`
-
-  * using triplets spelling out type, field name, and field value:
-
-    * `[ 'user', 'uid',   '17c07627d35e',      ]`
-    * `[ 'user', 'email', 'alice@hotmail.com', ]`
-    * `[ 'user', 'name',  'Alice',             ]`
-
-  * using a type / PKV pair:
-
-    * `[ 'user', '17c07627d35e', ]`
-
-
-  ###
-  #.........................................................................................................
-  switch type_of_hint = TYPES.type_of entry_hint
-    #.......................................................................................................
-    when 'list'
-      #.....................................................................................................
-      switch ( length = entry_hint.length )
-        when 2
-          [ type, pkv,  ] = entry_hint
-          [ pkn,  skns, ] = @_key_names_from_type me, type
-          return [ 'prk', type, pkn, pkv, ]
-        when 3
-          [ type, pskn, pskv ] = entry_hint
-          [ pkn,  skns, ] = @_key_names_from_type me, type
-          return [ 'prk', type, pskn, pskv, ] if pskn is pkn
-          return [ 'srk', type, pskn, pskv, ] if skns.indexOf pskn > -1
-          throw new Error "hint has PKN or SKN #{rpr pskn}, but schema has #{type}: #{[ pkn, skns ]}"
-      #.....................................................................................................
-      throw new Error "expected a list with two or three elements, got one with #{length} elements"
-    #.......................................................................................................
-    when 'text'
-      ### When the hint is a text, it is understood as a Primary or Secondary Record Key: ###
-      return R if ( R = @split_record_key me, entry_hint, null )?
-      throw new Error "unable to resolve hint #{rpr entry_hint}"
-  #.........................................................................................................
-  throw new Error "unable to resolve hint of type #{type_of_hint}"
-
+#-----------------------------------------------------------------------------------------------------------
+@_secondary_record_key_from_id_triplet = ( me, type, skn, skv ) ->
+  skvx = @escape_key_value_crumb me, skv
+  return "#{type}/#{skn}:#{skvx}/~prk"
 
 #-----------------------------------------------------------------------------------------------------------
 @_key_names_from_type = ( me, type ) ->
@@ -390,9 +346,100 @@ _write_json = ( value ) -> JSON.stringify value
   return R
 
 
-
 #===========================================================================================================
-# KEY PARSING
+# KEY ANALYSIS
+#-----------------------------------------------------------------------------------------------------------
+@resolve_entry_hint = ( me, entry_hint ) ->
+  ### Given a valid 'hint' for an entry (a piece of data suitable to identify a certain record or entry in
+    the DB), return a quintuplet with the following values:
+
+        [ hint-type, psrk, type, pskn, pskv, ]
+
+    where `hint-type` is either `'prk'` (indicating the hint led to a Primary Key) or `'srk'` (indicating
+    the hint led to a Secondary Key), `psrk` is either the Primary or a Secondary Record Key, `type` is the
+    entry type, and `pskn` / `pskv` are the primary or secondary field's name and value, as the case may be.
+
+    For example, giving `'user/uid:17c07627d35e'` will return
+
+        [ 'prk', 'user/uid:17c07627d35e', 'user', 'uid', '17c07627d35e', ]
+
+    which indicates that what we have is a Primary Record Key whose value is repeated in the second element;
+    the last three elements (the 'ID triplet') we can glean that we should look for an entry of type 'user'
+    whose field 'uid' has value `17c07627d35e` to locate the entry hinted at. Similarly, passing
+    `[ 'user', 'email', 'alice@hotmail.com', ]` will result in
+
+        [ 'srk', 'user/email:alice@hotmail.com/~prk', 'user', 'email',   'alice@hotmail.com',  ]
+
+    which shows that we have to look for a secondary key `user/email:alice@hotmail.com/~prk` to retrieve
+    the PRK of a user whose `email` field is set to `alice@hotmail.com`.
+
+    Both primary and secondary entry hints may be given as strings or lists; the idea of the method is to
+    fill in the missing pieces of the equation so that the result covers everything the caller has to know
+    in order to start a meaningful request for a single entry against the DB.
+
+    Hints are accepted in a number of formats:
+
+    * **using an existing (partial) entry**: **NOT YET IMPLEMENTED** you may pass in a full, valid object
+      representing an entry; in this case, you will get back a quintuplet whose first element is `'prk'`.
+      It is also possible to pass in a *partial* entry, provided that both its `~isa` field is set to the
+      desired type and either the Primary Record field or one of the Secondary Record fields are set; the
+      return value will then preferrably indicate a PRK, or, if that does not work, one of the SRKs.
+
+    * **using the PRK or an SRK**:
+
+      * `'user/uid:17c07627d35e'`
+      * `'user/email:alice@hotmail.com/~prk'`
+      * `'user/name:Alice/~prk'`
+
+      Values given must be syntactically valid (i.e. they must parse when passed into one of the
+      `split_record_key` methods).
+
+    * **using triplets spelling out type, field name, and field value**:
+
+      * `[ 'user', 'uid',   '17c07627d35e',      ]`
+      * `[ 'user', 'email', 'alice@hotmail.com', ]`
+      * `[ 'user', 'name',  'Alice',             ]`
+
+      Triplets must start with the entry type and continue with the name of a Primary or Secondary Key
+      field and value.
+
+    * **using a type / PKV pair**:
+
+      * `[ 'user', '17c07627d35e', ]` ###
+  #.........................................................................................................
+  switch type_of_hint = TYPES.type_of entry_hint
+    #.......................................................................................................
+    when 'list'
+      #.....................................................................................................
+      switch ( length = entry_hint.length )
+        #...................................................................................................
+        when 2
+          [ type, pkv,  ] = entry_hint
+          [ pkn,  skns, ] = @_key_names_from_type me, type
+          prk             = @_primary_record_key_from_id_triplet me, type, pkn, pkv
+          return [ 'prk', prk, type, pkn, pkv, ]
+        #...................................................................................................
+        when 3
+          [ type, pskn, pskv ] = entry_hint
+          [ pkn,  skns,      ] = @_key_names_from_type me, type
+          if pskn is pkn
+            prk = @_primary_record_key_from_id_triplet me, type, pskn, pskv
+            return [ 'prk', prk, type, pskn, pskv, ]
+          else if skns.indexOf pskn > -1
+            srk = @_secondary_record_key_from_id_triplet me, type, pskn, pskv
+            return [ 'srk', srk, type, pskn, pskv, ]
+          #.................................................................................................
+          throw new Error "hint has PKN or SKN #{rpr pskn}, but schema has #{type}: #{[ pkn, skns ]}"
+      #.....................................................................................................
+      throw new Error "expected a list with two or three elements, got one with #{length} elements"
+    #.......................................................................................................
+    when 'text'
+      ### When the hint is a text, it is understood as a Primary or Secondary Record Key: ###
+      return R if ( R = @analyze_record_key me, entry_hint, null )?
+      throw new Error "unable to resolve hint #{rpr entry_hint}"
+  #.........................................................................................................
+  throw new Error "unable to resolve hint of type #{type_of_hint}"
+
 #-----------------------------------------------------------------------------------------------------------
 crumb = '([^/:\\s]+)'
 @_prk_matcher = /// ^ #{crumb} / #{crumb} : #{crumb}        $ ///
@@ -400,17 +447,8 @@ crumb = '([^/:\\s]+)'
 
 #-----------------------------------------------------------------------------------------------------------
 @split_record_key = ( me, rk, fallback ) ->
-  R = @split_primary_record_key   me, rk, null
-  #.........................................................................................................
-  if R?
-    R.unshift 'prk'
-    return R
-  #.........................................................................................................
-  R = @split_secondary_record_key me, rk, null
-  if R?
-    R.unshift 'srk'
-    return R
-  #.........................................................................................................
+  return R if ( R = @split_primary_record_key   me, rk, null )?
+  return R if ( R = @split_secondary_record_key me, rk, null )?
   return fallback unless fallback is undefined
   throw new Error "illegal PRK / SRK: #{rpr rk}"
 
@@ -429,6 +467,29 @@ crumb = '([^/:\\s]+)'
     return fallback unless fallback is undefined
     throw new Error "illegal SRK: #{rpr srk}"
   return match[ 1 .. 3 ]
+
+#-----------------------------------------------------------------------------------------------------------
+@analyze_record_key = ( me, rk, fallback ) ->
+  return R if ( R = @analyze_primary_record_key   me, rk, null )?
+  return R if ( R = @analyze_secondary_record_key me, rk, null )?
+  return fallback unless fallback is undefined
+  throw new Error "illegal PRK / SRK: #{rpr rk}"
+
+#-----------------------------------------------------------------------------------------------------------
+@analyze_primary_record_key = ( me, prk, fallback ) ->
+  R = @split_primary_record_key me, prk, null
+  unless R?
+    return fallback unless fallback is undefined
+    throw new Error "illegal PRK: #{rpr prk}"
+  return [ 'prk', prk, R... ]
+
+#-----------------------------------------------------------------------------------------------------------
+@analyze_secondary_record_key = ( me, srk, fallback ) ->
+  R = @split_secondary_record_key me, srk, null
+  unless R?
+    return fallback unless fallback is undefined
+    throw new Error "illegal SRK: #{rpr srk}"
+  return [ 'srk', srk, R... ]
 
 
 #===========================================================================================================

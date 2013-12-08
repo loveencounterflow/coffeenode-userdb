@@ -25,7 +25,7 @@ after                     = suspend.after
 eventually                = suspend.eventually
 immediately               = suspend.immediately
 every                     = suspend.every
-USERDB                    = require 'coffeenode-userdb'
+USERDB                    = require '..'
 #...........................................................................................................
 ### https://github.com/mranney/node_redis ###
 redis                     = require 'redis'
@@ -148,34 +148,36 @@ async                     = require 'async'
       USERDB.close db
 
 #-----------------------------------------------------------------------------------------------------------
-@test_id_triplet_from_hint = ->
-  log TRM.blue 'test_id_triplet_from_hint'
+@test_resolve_entry_hint = ->
+  log TRM.blue 'test_resolve_entry_hint'
   db = USERDB.new_db()
   good_probes = [
-    [ 'user/uid:17c07627d35e',                      [ 'user', 'uid',    '17c07627d35e'        ], ]
-    [ 'user/email:alice@hotmail.com/~prk',          [ 'user', 'email',  'alice@hotmail.com'   ], ]
-    [ 'user/name:Alice/~prk',                       [ 'user', 'name',   'Alice'               ], ]
-    [ [ 'user', 'email', 'alice@hotmail.com', ],    [ 'user', 'email',  'alice@hotmail.com',  ], ]
-    [ [ 'user', 'name',  'Alice',             ],    [ 'user', 'name',   'Alice',              ], ]
-    [ [ 'user', 'uid',   '17c07627d35e',      ],    [ 'user', 'uid',    '17c07627d35e',       ], ]
-    [ [ 'user', '17c07627d35e', ],                  [ 'user', 'uid',    '17c07627d35e',       ], ]
-    [ [ 'user', 'some-uid' ], [ 'user', 'uid', 'some-uid' ] ]
-    [ 'user/uid:2db2e22a4db5', [ 'user', 'uid', '2db2e22a4db5' ] ]
+    #.......................................................................................................
+    [ 'user/uid:17c07627d35e',                      [ 'prk', 'user', 'uid',     '17c07627d35e'        ], ]
+    [ [ 'user', 'uid',   '17c07627d35e',      ],    [ 'prk', 'user', 'uid',     '17c07627d35e',       ], ]
+    [ [ 'user', '17c07627d35e', ],                  [ 'prk', 'user', 'uid',     '17c07627d35e',       ], ]
+    [ [ 'user', 'some-uid' ],                       [ 'prk', 'user', 'uid',     'some-uid'            ], ]
+    [ 'user/uid:2db2e22a4db5',                      [ 'prk', 'user', 'uid',     '2db2e22a4db5'        ], ]
+    #.......................................................................................................
+    [ 'user/email:alice@hotmail.com/~prk',          [ 'srk', 'user', 'email',   'alice@hotmail.com'   ], ]
+    [ 'user/name:Alice/~prk',                       [ 'srk', 'user', 'name',    'Alice'               ], ]
+    [ [ 'user', 'email', 'alice@hotmail.com', ],    [ 'srk', 'user', 'email',   'alice@hotmail.com',  ], ]
+    [ [ 'user', 'name',  'Alice',             ],    [ 'srk', 'user', 'name',    'Alice',              ], ]
     ]
   #.........................................................................................................
   bad_probes = [
-    [ 'XXXXXX:Alice/~prk',  "unable to get ID facet from 'XXXXXX:Alice/~prk'", ]
-    [ 'some-random-text',   "unable to get ID facet from \'some-random-text'"   ]
-    [ 'foo/bar',            "unable to get ID facet from \'foo/bar'"   ]
+    [ 'XXXXXX:Alice/~prk',  "unable to resolve hint 'XXXXXX:Alice/~prk'", ]
+    [ 'some-random-text',   "unable to resolve hint \'some-random-text'"   ]
+    [ 'foo/bar',            "unable to resolve hint \'foo/bar'"   ]
     ]
   #.........................................................................................................
   for [ probe, expectation, ] in good_probes
-    result = USERDB._id_triplet_from_hint db, probe
+    result = USERDB.resolve_entry_hint db, probe
     info probe, expectation, result, TRM.truth BAP.equals result, expectation
   #.........................................................................................................
   for [ probe, expectation, ] in bad_probes
     try
-      result = USERDB._id_triplet_from_hint db, probe
+      result = USERDB.resolve_entry_hint db, probe
     catch error
       if TYPES.isa_jsregex expectation
         info probe, expectation, ( rpr error[ 'message' ] ), TRM.truth expectation.test error[ 'message' ]
@@ -230,7 +232,7 @@ async                     = require 'async'
 #   USERDB.dump db, '*'
 
 
-@test_id_triplet_from_hint()
+@test_resolve_entry_hint()
 # @test_split_primary_record_key()
 
 

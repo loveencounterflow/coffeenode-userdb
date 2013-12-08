@@ -258,7 +258,7 @@ _write_json = ( value ) -> JSON.stringify value
 
 #-----------------------------------------------------------------------------------------------------------
 @_primary_record_key_from_hint = ( me, id_hint ) ->
-  return @_primary_record_key_from_id_triplet me, @_id_triplet_from_hint me, id_hint
+  return @_primary_record_key_from_id_triplet me, @resolve_entry_hint me, id_hint
 
 #-----------------------------------------------------------------------------------------------------------
 @_primary_record_key_from_id_triplet = ( me, P... ) ->
@@ -289,8 +289,7 @@ _write_json = ( value ) -> JSON.stringify value
   return "#{type}/#{skn}:#{skvx}/~prk"
 
 #-----------------------------------------------------------------------------------------------------------
-@_id_triplet_from_hint = ( me, id_hint ) ->
-
+@resolve_entry_hint = ( me, entry_hint ) ->
   ###
 
 
@@ -314,35 +313,31 @@ _write_json = ( value ) -> JSON.stringify value
 
 
   ###
-
-
-  switch type_of_hint = TYPES.type_of id_hint
+  #.........................................................................................................
+  switch type_of_hint = TYPES.type_of entry_hint
     #.......................................................................................................
     when 'list'
       #.....................................................................................................
-      switch ( length = id_hint.length )
+      switch ( length = entry_hint.length )
         when 2
-          [ type, pkv,  ] = id_hint
+          [ type, pkv,  ] = entry_hint
           [ pkn,  skns, ] = @_key_names_from_type me, type
-          return [ type, pkn, pkv, ]
+          return [ 'prk', type, pkn, pkv, ]
         when 3
-          [ type, pskn, pskv ] = id_hint
+          [ type, pskn, pskv ] = entry_hint
           [ pkn,  skns, ] = @_key_names_from_type me, type
-          return [ type, pskn, pskv, ] if pskn is pkn
-          return [ type, pskn, pskv, ] if skns.indexOf pskn > -1
+          return [ 'prk', type, pskn, pskv, ] if pskn is pkn
+          return [ 'srk', type, pskn, pskv, ] if skns.indexOf pskn > -1
           throw new Error "hint has PKN or SKN #{rpr pskn}, but schema has #{type}: #{[ pkn, skns ]}"
-        else
-          throw new Error "expected a list with two or three elements, got one with #{length} elements"
       #.....................................................................................................
-      pkn           = @_primary_key_name_from_type me, type
-      return [ type, pkn, id, ]
+      throw new Error "expected a list with two or three elements, got one with #{length} elements"
     #.......................................................................................................
     when 'text'
       ### When the hint is a text, it is understood as a Primary or Secondary Record Key: ###
-      return R if ( R = @split_record_key me, id_hint, null )?
-      throw new Error "unable to get ID facet from #{rpr id_hint}"
+      return R if ( R = @split_record_key me, entry_hint, null )?
+      throw new Error "unable to resolve hint #{rpr entry_hint}"
   #.........................................................................................................
-  throw new Error "unable to get ID facet from value of type #{type_of_hint}"
+  throw new Error "unable to resolve hint of type #{type_of_hint}"
 
 
 #-----------------------------------------------------------------------------------------------------------
@@ -406,11 +401,18 @@ crumb = '([^/:\\s]+)'
 #-----------------------------------------------------------------------------------------------------------
 @split_record_key = ( me, rk, fallback ) ->
   R = @split_primary_record_key   me, rk, null
-  R = @split_secondary_record_key me, rk, null unless R?
-  unless R?
-    return fallback unless fallback is undefined
-    throw new Error "illegal PRK / SRK: #{rpr rk}"
-  return R
+  #.........................................................................................................
+  if R?
+    R.unshift 'prk'
+    return R
+  #.........................................................................................................
+  R = @split_secondary_record_key me, rk, null
+  if R?
+    R.unshift 'srk'
+    return R
+  #.........................................................................................................
+  return fallback unless fallback is undefined
+  throw new Error "illegal PRK / SRK: #{rpr rk}"
 
 #-----------------------------------------------------------------------------------------------------------
 @split_primary_record_key = ( me, prk, fallback ) ->

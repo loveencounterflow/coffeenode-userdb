@@ -106,11 +106,19 @@ async                     = require 'async'
   return null
 
 #-----------------------------------------------------------------------------------------------------------
-@test_get_user = ( db, handler ) ->
-  uid = '281fe6cd2daf'
-  USERDB.get_user db, uid, ( error, user ) =>
-    return handler error if error?
-    debug uid, user
+@test_get_user = ( test ) ->
+  db = USERDB.new_db()
+  probe = 'user/uid:17c07627d35e'
+  probe = '17c07627d35e'
+  probe = [ 'uid', '17c07627d35e', ]
+  # probe = [ 'name', 'Alice', ]
+  USERDB.dump db, '*', 'short', ( error ) =>
+    throw error if error?
+    USERDB.get_user db, probe, ( error, user ) =>
+      throw error if error?
+      debug probe, user
+      USERDB.close db
+      test.done()
 
 #-----------------------------------------------------------------------------------------------------------
 @test_user_integrity = ( db, handler ) ->
@@ -187,6 +195,46 @@ async                     = require 'async'
     throw new Error "#{rpr probe} should have caused an error, but gave #{rpr result}"
   #.........................................................................................................
   USERDB.close db
+  test.done()
+
+#-----------------------------------------------------------------------------------------------------------
+@test_resolve_user_entry_hint = ( test ) ->
+  log TRM.blue 'test_resolve_user_entry_hint'
+  db = USERDB.new_db()
+  good_probes = [
+    #.......................................................................................................
+    [ '17c07627d35e',                               [ 'prk', 'user/uid:17c07627d35e', 'user', 'uid',     '17c07627d35e'        ], ]
+    [ 'some-random-text',                           [ 'prk', 'user/uid:some-random-text', 'user', 'uid',     'some-random-text'        ] ]
+    [ [ 'uid',   '17c07627d35e',              ],    [ 'prk', 'user/uid:17c07627d35e', 'user', 'uid',     '17c07627d35e',       ], ]
+    [ 'user/uid:2db2e22a4db5',                      [ 'prk', 'user/uid:2db2e22a4db5', 'user', 'uid',     '2db2e22a4db5'        ], ]
+    #.......................................................................................................
+    [ 'user/email:alice@hotmail.com/~prk',          [ 'srk', 'user/email:alice@hotmail.com/~prk', 'user', 'email',   'alice@hotmail.com'   ], ]
+    [ 'user/name:Alice/~prk',                       [ 'srk', 'user/name:Alice/~prk',              'user', 'name',    'Alice'               ], ]
+    [ [ 'email', 'alice@hotmail.com',         ],    [ 'srk', 'user/email:alice@hotmail.com/~prk', 'user', 'email',   'alice@hotmail.com',  ], ]
+    [ [ 'name',  'Alice',                     ],    [ 'srk', 'user/name:Alice/~prk',              'user', 'name',    'Alice',              ], ]
+    ]
+  #.........................................................................................................
+  bad_probes = [
+    [ [ '17c07627d35e',                       ],    'expected a list with two elements, got one with 1 elements', ]
+    ]
+  #.........................................................................................................
+  for [ probe, expectation, ] in good_probes
+    result = USERDB.resolve_user_entry_hint db, probe
+    info probe, expectation, result, TRM.truth BAP.equals result, expectation
+  #.........................................................................................................
+  for [ probe, expectation, ] in bad_probes
+    try
+      result = USERDB.resolve_user_entry_hint db, probe
+    catch error
+      if TYPES.isa_jsregex expectation
+        info probe, expectation, ( rpr error[ 'message' ] ), TRM.truth expectation.test error[ 'message' ]
+      else
+        info probe, expectation, ( rpr error[ 'message' ] ), TRM.truth expectation == error[ 'message' ]
+      continue
+    throw new Error "#{rpr probe} should have caused an error, but gave #{rpr result}"
+  #.........................................................................................................
+  USERDB.close db
+  test.done()
 
 #-----------------------------------------------------------------------------------------------------------
 @test_split_primary_record_key = ->
@@ -232,9 +280,13 @@ async                     = require 'async'
 #   USERDB.dump db, '*'
 
 
-@test_resolve_entry_hint()
+# @test_resolve_entry_hint()
 # @test_split_primary_record_key()
 
+
+test = done: ->
+# @test_resolve_user_entry_hint test
+@test_get_user test
 
 
 

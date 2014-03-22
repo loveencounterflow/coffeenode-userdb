@@ -20,7 +20,8 @@
     "bcryptjs": "~0.7.10",
     "coffeenode-zxcvbn": "~1.0.0",
     "bcrypt": "~0.7.7",
-    "redis": "~0.9.1"
+    "redis": "~0.9.1",
+    "async": "~0.2.10"
   },
   "optionalDependencies": {
     "bcrypt": "~0.7.7"
@@ -47,5 +48,5 @@
   },
   "readmeFilename": "README.md",
   "readme": "ERROR: No README data found!",
-  "_id": "coffeenode-userdb@0.0.7"
+  "_id": "coffeenode-userdb@0.0.8"
 }

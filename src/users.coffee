@@ -127,13 +127,17 @@ create_rnd_id             = BAP.get_create_rnd_id 8327, 32
   return @test_integrity me, [ 'user', uid_hint, ], handler
 
 #-----------------------------------------------------------------------------------------------------------
-@get_user = ( me, uid_hint, fallback, handler ) ->
+@get_user = ( me, entry_hint, fallback, handler ) ->
   [ handler, fallback, ]  = [ fallback, undefined, ] unless handler?
-  ### TAINT we're wrongly assuming that `uid_hint` is a UID, which is wrong, as it could also be a secondary
-  key ###
-  prk                     = @_primary_record_key_from_hint me, [ 'user', uid_hint, ]
-  return @entry_from_record_key me, prk,           handler if fallback is undefined
-  return @entry_from_record_key me, prk, fallback, handler
+  #.........................................................................................................
+  [ hint_type
+    psrk
+    type
+    pskn
+    pskv      ] = @resolve_user_entry_hint me, entry_hint
+  #.........................................................................................................
+  return @entry_from_primary_record_key   me, psrk, handler if hint_type is 'prk'
+  return @entry_from_secondary_record_key me, psrk, handler
 
 #-----------------------------------------------------------------------------------------------------------
 @authenticate_user = ( me, uid_hint, password, handler ) ->
@@ -152,7 +156,37 @@ create_rnd_id             = BAP.get_create_rnd_id 8327, 32
   return null
 
 
+#===========================================================================================================
+# KEY ANALYSIS
+#-----------------------------------------------------------------------------------------------------------
+@resolve_user_entry_hint = ( me, entry_hint ) ->
+  #.........................................................................................................
+  switch type_of_hint = TYPES.type_of entry_hint
+    #.......................................................................................................
+    when 'list'
+      #.....................................................................................................
+      if ( length = entry_hint.length ) is 2
+        [ pskn,  pskv, ] = entry_hint
+        return @resolve_entry_hint me, [ 'user', pskn, pskv, ]
+      #.....................................................................................................
+      throw new Error "expected a list with two elements, got one with #{length} elements"
+    #.......................................................................................................
+    when 'text'
+      ### When the hint is a text, it is understood as a Primary or Secondary Record Key: ###
+      return R if ( R = @analyze_record_key me, entry_hint, null )?
+      pkn = @_primary_key_name_from_type me, 'user'
+      return R if ( R = @resolve_entry_hint me, [ 'user', pkn, entry_hint, ], null )?
+      throw new Error "unable to resolve hint #{rpr entry_hint}"
+  #.........................................................................................................
+  throw new Error "unable to resolve hint of type #{type_of_hint}"
 
+
+#===========================================================================================================
+# KEY SYNTHESIS
+#-----------------------------------------------------------------------------------------------------------
+@primary_record_key_from_user_id = ( me, uid ) ->
+  pkn = @_primary_key_name_from_type me, 'user'
+  return @primary_record_key_from_id_triplet me, [ 'user', pkn, uid ]
 
 
 

@@ -196,7 +196,7 @@ _write_json = ( value ) -> JSON.stringify value
 #===========================================================================================================
 # RECORD & ENTRY RETRIEVAL
 #-----------------------------------------------------------------------------------------------------------
-@entry_from_record_key = ( me, prk, fallback, handler ) ->
+@entry_from_primary_record_key = ( me, prk, fallback, handler ) ->
   ### TAINT implement type casting for all Redis types ###
   [ fallback, handler, ] = [ undefined, fallback, ] unless handler?
   #.........................................................................................................
@@ -215,11 +215,31 @@ _write_json = ( value ) -> JSON.stringify value
   #.........................................................................................................
   return null
 
+# #-----------------------------------------------------------------------------------------------------------
+# @entry_from_secondary_record_key = ( me, srk, fallback, handler ) ->
+#   [ fallback, handler, ] = [ undefined, fallback, ] unless handler?
+#   #.........................................................................................................
+#   @record_from_srk me, srk, ( error, value ) =>
+#     if error?
+#       return handler error if fallback is undefined
+#       if /^nothing found for primary record key /.test error[ 'message' ]
+#         return handler null, fallback
+#       return handler error
+#     if TYPES.isa_pod value
+#       try
+#         return handler null, @_cast_from_db me, value[ '~prk' ], value
+#       catch error
+#         return handler error
+#     return handler null, value
+#   #.........................................................................................................
+#   return null
+
 #-----------------------------------------------------------------------------------------------------------
 @record_from_prk = ( me, prk, fallback, handler ) ->
   [ fallback, handler, ] = [ undefined, fallback, ] unless handler?
   #.........................................................................................................
-  me[ '%self' ].type prk,  ( error, type ) =>
+  debug '©4r', rpr prk
+  me[ '%self' ].type prk, ( error, type ) =>
     return handler error if error?
     #.......................................................................................................
     switch type

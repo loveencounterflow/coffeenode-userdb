@@ -69,7 +69,7 @@ async                     = require 'async'
     'primary-entry':                  null
     'secondary-entries':              []
   #.........................................................................................................
-  @entry_from_record_key me, prk, misfit, ( error, entry ) =>
+  @entry_from_primary_record_key me, prk, misfit, ( error, entry ) =>
     if error?
       if /^unable to find schema for type /.test error[ 'message' ]
         Z[ 'error-count' ] += 2
@@ -110,7 +110,7 @@ async                     = require 'async'
       #.....................................................................................................
       else
         ### TAINT should also check for records that correspond to missing secondary fields ###
-        @entry_from_record_key me, srk, misfit, ( error, secondary ) =>
+        @entry_from_primary_record_key me, srk, misfit, ( error, secondary ) =>
           return done error if error?
           #.................................................................................................
           if secondary is misfit
